@@ -8,6 +8,7 @@
 #include "effects.h"
 #include "fpvapi.h"
 #include "log.h"
+#include "render.h"
 #include "scripthook.h"
 #include "world.h"
 
@@ -22,6 +23,7 @@ constexpr float kWidestAspect = 2.4f;  // frustum probes cover up to 21:9
 using fpvapi::fpv;
 
 enum class View { Fpv, Chase, Los, Count };
+constexpr uint32_t kMoveNikoAction = 1;  // F8 > Fly button id
 
 fpv_drone *g_drone = nullptr;
 uint32_t g_cam = 0;
@@ -109,12 +111,27 @@ float near_clip_for(const fpv_camera &c, float fov_y) {
     return n < kMinNearClip ? kMinNearClip : n > kNearClip ? kNearClip : n;
 }
 
+// libfpv widens the FOV for its fisheye so the top and bottom edges of the
+// distorted image show the FOV the player chose, but for the camera's
+// aspect_hint (4:3 analog). Redo it for the game's real aspect.
+float lens_edge(const fpv_camera &c, float aspect) {
+    float r2 = 1 / (1 + aspect * aspect);  // squared radius of the top edge centre
+    float zoom = c.distortion_zoom > 0 ? c.distortion_zoom : 1;
+    return (1 + c.distortion_k1 * r2 + c.distortion_k2 * r2 * r2) / zoom;
+}
+float lens_fov(const fpv_camera &c) {
+    if ((c.distortion_k1 == 0 && c.distortion_k2 == 0) || c.aspect_hint <= 0) return c.fov_y_degrees;
+    float chosen = std::tan(c.fov_y_degrees * 0.5f / kRadToDeg) * lens_edge(c, c.aspect_hint);
+    float fov = 2 * std::atan(chosen / lens_edge(c, render::aspect())) * kRadToDeg;
+    return fov > 170 ? 170 : fov;
+}
+
 void apply_camera(const fpv_camera &c, bool fpv_view) {
     float pitch, roll, heading;
     basis_to_euler(c.forward, c.up, c.right, &pitch, &roll, &heading);
     sh::call(N("SET_CAM_POS"), g_cam, c.position[0], c.position[1], c.position[2]);
     sh::call(N("SET_CAM_ROT"), g_cam, pitch, roll, heading);
-    float fov = fpv_view && tuning().fov > 0 ? tuning().fov : c.fov_y_degrees;
+    float fov = fpv_view && tuning().fov > 0 ? tuning().fov : fpv_view ? lens_fov(c) : c.fov_y_degrees;
     sh::call(N("SET_CAM_FOV"), g_cam, fov);
     float near_clip = tuning().near_clip > 0 ? tuning().near_clip : fpv_view ? near_clip_for(c, fov) : kNearClip;
     sh::call(N("SET_CAM_NEAR_CLIP"), g_cam, near_clip);
@@ -171,6 +188,7 @@ void start() {
     QueryPerformanceCounter(&g_last_tick);
     g_view = View::Fpv;
     audio::start();
+    fpv.fpv_overlay_set_action(kMoveNikoAction, "Move Niko here (N)");
 
     fpv_input_status st{};
     st.struct_size = sizeof st;
@@ -179,12 +197,13 @@ void start() {
                   g_spawn_pos[1], g_spawn_pos[2], heading, g_cam, int(st.source), st.device_name,
                   st.needs_setup ? " (needs setup)" : "");
     print(st.source == FPV_INPUT_SOURCE_RADIO
-              ? "FPV: radio connected. C camera, R reset, F7 back to Niko"
-              : "FPV: keyboard. Enter arm, W/S throttle, A/D yaw, arrows pitch/roll, C camera, R reset, F7 back",
+              ? "FPV: radio connected. C camera, R reset, N move Niko here, F7 back to Niko"
+              : "FPV: keyboard. Enter arm, W/S throttle, A/D yaw, arrows pitch/roll, C camera, R reset, N move Niko, F7 back",
           8000);
 }
 
 void stop() {
+    fpv.fpv_overlay_set_action(kMoveNikoAction, nullptr);
     audio::stop();  // before the drone: the audio thread reads libfpv's synth
     if (g_cam) {
         sh::call(N("ACTIVATE_SCRIPTED_CAMS"), false, false);
@@ -234,6 +253,31 @@ void inject_channels(const float channels[8]) {
 
 bool active() { return g_drone != nullptr; }
 
+// Niko faces the drone's heading.
+void move_niko_here() {
+    float pos[3] = {g_frame.position[0], g_frame.position[1], g_frame.position[2]};
+    const float *f = g_frame.camera.forward;
+    float heading = (f[0] * f[0] + f[1] * f[1] > 1e-6f) ? std::atan2(-f[0], f[1]) * kRadToDeg : 0;
+    // Stand on whatever is under the drone (roof, road, floor); the world
+    // probe already ignores Niko. Fall back to the drone's own height.
+    float origin[3] = {pos[0], pos[1], pos[2] + 0.5f}, down[3] = {0, 0, -1};
+    fpv_raycast_hit hit{};
+    bool ground = world::raycast(nullptr, origin, down, 300.0f, &hit) != 0;
+    float z = ground ? origin[2] - hit.distance : pos[2];
+    stop();
+    uint32_t ped = 0;
+    sh::call(N("GET_PLAYER_CHAR"), g_player, &ped);
+    sh::call(N("LOAD_SCENE"), pos[0], pos[1], z);  // the world streamed around Niko, not the drone
+    if (sh::call<bool>(N("IS_CHAR_IN_ANY_CAR"), ped))
+        sh::call(N("WARP_CHAR_FROM_CAR_TO_COORD"), ped, pos[0], pos[1], z + 1.0f);
+    else
+        sh::call(N("SET_CHAR_COORDINATES"), ped, pos[0], pos[1], z + 1.0f);
+    sh::call(N("SET_CHAR_HEADING"), ped, heading);
+    sh::call(N("SET_CAM_BEHIND_PED"), ped);
+    fpvlog::write("moved Niko to the drone: %.2f %.2f %.2f (ground %s) heading %.1f", pos[0], pos[1], z,
+                  ground ? "hit" : "missed", heading);
+}
+
 const fpv_frame &last_frame() { return g_frame; }
 
 bool osd_frame(fpv_frame *out) {
@@ -278,13 +322,22 @@ void tick() {
     g_last_tick = now;
     if (dt > 0.1f) dt = 0.1f;
 
-    bool camera_key = key_pressed('C'), reset_key = key_pressed('R');
+    sh::call(N("HIDE_HUD_AND_RADAR_THIS_FRAME"));  // the radar and HUD would cover the FPV feed
+
+    bool move_niko = false;
+    for (uint32_t id; (id = fpv.fpv_overlay_poll_action()) != 0;) move_niko |= id == kMoveNikoAction;
+    bool camera_key = key_pressed('C'), reset_key = key_pressed('R'), niko_key = key_pressed('N');
     if (!fpv.fpv_overlay_wants_input()) {  // otherwise the keys belong to the overlay
+        move_niko |= niko_key;
         if (camera_key) g_view = View((int(g_view) + 1) % int(View::Count));
         if (reset_key) {
             fpv.fpv_drone_reset(g_drone, g_spawn_pos, g_spawn_rot);
             fpv.fpv_drone_repair(g_drone);
         }
+    }
+    if (move_niko) {
+        move_niko_here();
+        return;
     }
 
     fpv_frame frame{};
@@ -299,7 +352,7 @@ void tick() {
     {
         std::lock_guard<std::mutex> lock(g_osd_mutex);
         g_osd_frame = frame;
-        g_osd_visible = g_view == View::Fpv && tuning().osd;
+        g_osd_visible = g_view == View::Fpv;
     }
     apply_camera(g_view == View::Fpv ? frame.camera : g_view == View::Chase ? frame.chase_camera : frame.los_camera,
                  g_view == View::Fpv);

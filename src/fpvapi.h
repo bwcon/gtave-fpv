@@ -13,7 +13,8 @@ namespace fpvapi {
     X(fpv_drone_tick) X(fpv_input_key) X(fpv_input_get_status) X(fpv_input_set_channels)         \
     X(fpv_texture_get) X(fpv_overlay_is_open) X(fpv_overlay_wants_input) X(fpv_overlay_set_display) \
     X(fpv_overlay_mouse_move) X(fpv_overlay_mouse_button) X(fpv_overlay_mouse_wheel)             \
-    X(fpv_overlay_render) X(fpv_osd_draw_data) X(fpv_audio_configure) X(fpv_audio_read)
+    X(fpv_overlay_render) X(fpv_osd_draw_data) X(fpv_audio_configure) X(fpv_audio_read)          \
+    X(fpv_overlay_set_action) X(fpv_overlay_poll_action)
 
 struct Api {
 #define FPV_FN(name) decltype(&::name) name = nullptr;

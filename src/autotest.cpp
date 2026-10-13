@@ -29,7 +29,8 @@ bool g_ped_mode = false;  // autotest.txt containing "ped" targets a pedestrian
 bool g_cam_mode = false;  // "cam": camera rotation-order test instead of a flight
 
 // autotest.txt: "car" or "ped" target, "cam" test, "still" (drone stays on the
-// ground), and knobs fov=<deg> near=<m> osd=<0|1>.
+// ground), "hover", "niko" (end with Move Niko here), and knobs fov=<deg>
+// near=<m> osd=<0|1> secs=<flight seconds>.
 void read_config() {
     char buf[256] = {};
     if (FILE *f = std::fopen("fpv-data\\autotest.txt", "r")) {
@@ -42,6 +43,8 @@ void read_config() {
     t = drone::Tuning{};
     t.armed_flight = std::strstr(buf, "still") == nullptr;
     t.hover = std::strstr(buf, "hover") != nullptr;
+    t.move_niko = std::strstr(buf, "niko") != nullptr;
+    if (const char *p = std::strstr(buf, "secs=")) t.seconds = float(std::atof(p + 5));
     if (const char *p = std::strstr(buf, "fov=")) t.fov = float(std::atof(p + 4));
     if (const char *p = std::strstr(buf, "near=")) t.near_clip = float(std::atof(p + 5));
     if (const char *p = std::strstr(buf, "osd=")) t.osd = std::atoi(p + 4) != 0;
@@ -339,7 +342,13 @@ void tick() {
             return;
         case Stage::Flying:
             sticks(t);
-            if (t > 20.0f || !drone::active()) {
+            if (t > drone::tuning().seconds || !drone::active()) {
+                if (drone::active() && drone::tuning().move_niko) {
+                    drone::move_niko_here();
+                    float x, y, z;
+                    sh::call(N("GET_CHAR_COORDINATES"), player_ped(), &x, &y, &z);
+                    fpvlog::write("autotest: Niko now at %.2f %.2f %.2f", x, y, z);
+                }
                 if (drone::active()) drone::toggle();
                 release_target();
                 g_stage = Stage::Idle;

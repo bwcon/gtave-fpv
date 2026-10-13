@@ -208,8 +208,28 @@ world collision, impacts that ragdoll/damage peds and vehicles.
     existing autotest.txt, so recordings lagged one run until scratchpad at.sh stopped deploying between runs.
   - **User wants the game closed after testing** (GTAIV + PlayGTAIV + Launcher by PID).
 
+- 2026-10-14 00:50-00:58: User asked: commit, fisheye, "Move Niko here", hide HUD, README. All done and self-tested.
+  - Committed the earlier work (mod f288204, libfpv a7d8960 on main; win32-i686 was merged into main by then).
+  - **Fisheye VERIFIED**: render.cpp StretchRects the back buffer into a D3DPOOL_DEFAULT render-target texture
+    (released on device lost) and draws it back through a 64x36 grid whose texcoords follow libfpv's Brown-Conrady
+    formula (no shader compiler needed). Only in the FPV view, before the OSD/overlay. FPV_INIT_NO_LENS_DISTORTION
+    is no longer passed. drone.cpp lens_fov() redoes libfpv's FOV widening for the real back-buffer aspect
+    (render::aspect()) instead of the 4:3 aspect_hint: FOV 119.2 at 16:9. Single application per frame: the
+    screenshot shows a moderate barrel warp (lamp poles bowed), not a doubled one.
+    Known: PRINT_STRING help text is drawn by the game before our pass, so it gets warped/pushed to the bottom edge.
+  - **HUD hidden VERIFIED**: HIDE_HUD_AND_RADAR_THIS_FRAME every drone tick (all views); no state to restore.
+  - **Move Niko here VERIFIED** (button + key): libfpv got fpv_overlay_set_action(id, label) /
+    fpv_overlay_poll_action() (libfpv 41c30f1, test added, 20 tests pass win32 + linux). Button "Move Niko here (N)"
+    in F8 > Fly while flying; N key too. drone::move_niko_here(): probe down from the drone, stop(), LOAD_SCENE,
+    SET_CHAR_COORDINATES (WARP_CHAR_FROM_CAR_TO_COORD if in a car) at ground + 1, heading = drone's,
+    SET_CAM_BEHIND_PED. Clicked via WinDrive (`click 639 500` at 1920x1080) and `key 0x4E`; Niko moved 13 m.
+  - New libfpv exports mean a libfpv.dll change needs a game restart (hot reload keeps the old dll).
+  - autotest knobs: `niko` (end with Move Niko here), `secs=<flight seconds>`. WinDrive keys take hex VKs (`key 0x77`).
+  - README.md + docs/fpv-view.jpg added.
+
 ## Next session — start here
-0. Ask the user about the 2026-10-14 fixes (flicker, flips, ground, sound, FOV). Ask before committing the libfpv flag.
+0. Ask the user how the fisheye, HUD hiding and Move Niko here feel with the real radio (fisheye default strength?).
+   Maybe draw the launch help text ourselves (the game's is warped by the lens) or show it in the OSD.
 1. Check the overlay with real mouse use (GTA may clip/hide the cursor; GetCursorPos may stick) - needs the user.
 2. Polish: frame.altitude -1 when > a few m up (libfpv probe range?); tune effect strengths with the user.
 3. Prop body (visible drone model for chase/LOS cams), audio (fpv_audio_read -> XAudio2/waveOut).

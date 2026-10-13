@@ -2,10 +2,13 @@
 
 #include <windows.h>
 
+#include <atomic>
+#include <cmath>
 #include <vector>
 
 #include "drone.h"
 #include "fpvapi.h"
+#include "log.h"
 
 namespace render {
 namespace {
@@ -26,6 +29,15 @@ struct Texture {
 Texture g_textures[3];  // indexed by FPV_TEXTURE_* (1 overlay font, 2 OSD font)
 std::vector<Vertex> g_vertices;
 LARGE_INTEGER g_last;
+std::atomic<float> g_aspect{16.0f / 9.0f};
+
+// Fisheye: a copy of the finished frame, drawn back through a warped grid.
+IDirect3DTexture9 *g_scene = nullptr;
+UINT g_scene_w = 0, g_scene_h = 0;
+D3DFORMAT g_scene_format = D3DFMT_UNKNOWN;
+constexpr int kGridX = 64, kGridY = 36;  // cells; the warp is smooth, so this is exact to a pixel
+std::vector<Vertex> g_grid;
+std::vector<uint16_t> g_grid_indices;
 
 IDirect3DTexture9 *texture(IDirect3DDevice9 *dev, uint64_t id) {
     if (id >= 3) return nullptr;
@@ -124,6 +136,54 @@ void draw(IDirect3DDevice9 *dev, const fpv_draw_data &dd) {
                                         g_vertices.data() + cmd.vertex_offset, sizeof(Vertex));
         }
     }
+}
+
+// libfpv's lens (docs/INTEGRATION.md#lens-distortion) as a mesh instead of a
+// pixel shader: each grid vertex at output position uv samples the copied
+// scene at c * (1 + k1 r2 + k2 r2^2) / zoom, with |c| = 1 at the corners.
+// The game drew the frame with the widened FOV from frame.camera.
+bool draw_lens(IDirect3DDevice9 *dev, IDirect3DSurface9 *backbuffer, const D3DSURFACE_DESC &desc,
+               const fpv_camera &cam) {
+    if (!g_scene || g_scene_w != desc.Width || g_scene_h != desc.Height || g_scene_format != desc.Format) {
+        if (g_scene) g_scene->Release();
+        g_scene = nullptr;
+        if (FAILED(dev->CreateTexture(desc.Width, desc.Height, 1, D3DUSAGE_RENDERTARGET, desc.Format, D3DPOOL_DEFAULT,
+                                      &g_scene, nullptr)))
+            return false;
+        g_scene_w = desc.Width, g_scene_h = desc.Height, g_scene_format = desc.Format;
+    }
+    IDirect3DSurface9 *copy = nullptr;
+    if (FAILED(g_scene->GetSurfaceLevel(0, &copy))) return false;
+    HRESULT hr = dev->StretchRect(backbuffer, nullptr, copy, nullptr, D3DTEXF_NONE);
+    copy->Release();
+    if (FAILED(hr)) return false;
+
+    const float w = float(desc.Width), h = float(desc.Height), a = w / h;
+    const float sx = a / (0.5f * std::sqrt(a * a + 1)), sy = 1 / (0.5f * std::sqrt(a * a + 1));
+    const float k1 = cam.distortion_k1, k2 = cam.distortion_k2, zoom = cam.distortion_zoom > 0 ? cam.distortion_zoom : 1;
+    g_grid.resize((kGridX + 1) * (kGridY + 1));
+    for (int y = 0; y <= kGridY; ++y)
+        for (int x = 0; x <= kGridX; ++x) {
+            float u = float(x) / kGridX, v = float(y) / kGridY;
+            float cx = (u - 0.5f) * sx, cy = (v - 0.5f) * sy, r2 = cx * cx + cy * cy;
+            float m = (1 + k1 * r2 + k2 * r2 * r2) / zoom;
+            g_grid[y * (kGridX + 1) + x] = {u * w - 0.5f, v * h - 0.5f, 0.0f, 1.0f, 0xffffffffu,
+                                            cx * m / sx + 0.5f, cy * m / sy + 0.5f};
+        }
+    if (g_grid_indices.empty())
+        for (int y = 0; y < kGridY; ++y)
+            for (int x = 0; x < kGridX; ++x) {
+                uint16_t i = uint16_t(y * (kGridX + 1) + x), j = uint16_t(i + kGridX + 1);
+                for (uint16_t k : {i, uint16_t(i + 1), j, uint16_t(i + 1), uint16_t(j + 1), j}) g_grid_indices.push_back(k);
+            }
+    RECT full = {0, 0, LONG(desc.Width), LONG(desc.Height)};
+    dev->SetScissorRect(&full);
+    dev->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
+    dev->SetTexture(0, g_scene);
+    dev->DrawIndexedPrimitiveUP(D3DPT_TRIANGLELIST, 0, UINT(g_grid.size()), UINT(g_grid_indices.size() / 3),
+                                g_grid_indices.data(), D3DFMT_INDEX16, g_grid.data(), sizeof(Vertex));
+    dev->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
+    return true;
 }
 
 // Mouse for the overlay, in back buffer pixels.
@@ -235,14 +295,18 @@ void frame(IDirect3DDevice9 *dev) {
     backbuffer->GetDesc(&desc);
     float w = float(desc.Width), h = float(desc.Height);
 
+    g_aspect = w / h;
+
     fpv.fpv_overlay_set_display(w, h, h > 1080.0f ? h / 1080.0f : 1.0f);
     if (fpv.fpv_overlay_is_open()) feed_mouse(dev, w, h);
 
     static fpv_frame snapshot;
     const fpv_draw_data *osd = nullptr;
-    if (drone::osd_frame(&snapshot)) osd = fpv.fpv_osd_draw_data(&snapshot, w, h, FPV_OSD_STYLE_ANALOG);
+    bool fpv_view = drone::osd_frame(&snapshot);
+    bool lens = fpv_view && (snapshot.camera.distortion_k1 != 0 || snapshot.camera.distortion_k2 != 0);
+    if (fpv_view && drone::tuning().osd) osd = fpv.fpv_osd_draw_data(&snapshot, w, h, FPV_OSD_STYLE_ANALOG);
     const fpv_draw_data *overlay = fpv.fpv_overlay_render(dt);
-    if ((!osd || !osd->list_count) && (!overlay || !overlay->list_count)) {
+    if (!lens && (!osd || !osd->list_count) && (!overlay || !overlay->list_count)) {
         backbuffer->Release();
         return;
     }
@@ -254,18 +318,30 @@ void frame(IDirect3DDevice9 *dev) {
     dev->GetRenderTarget(0, &rt);
     bool on_backbuffer = rt == backbuffer;
     if (rt) rt->Release();
-    backbuffer->Release();
-    if (!on_backbuffer) return;
+    if (!on_backbuffer) {
+        backbuffer->Release();
+        return;
+    }
 
     SavedState saved;
     saved.save(dev);
     setup_state(dev, w, h);
+    if (lens && !draw_lens(dev, backbuffer, desc, snapshot.camera)) {
+        static int reported = 0;
+        if (reported++ < 3) fpvlog::write("render: fisheye pass failed (format %d)", int(desc.Format));
+    }
     if (osd) draw(dev, *osd);
     if (overlay) draw(dev, *overlay);
     saved.restore(dev);
+    backbuffer->Release();
 }
 
+float aspect() { return g_aspect; }
+
 void release() {
+    if (g_scene) g_scene->Release();
+    g_scene = nullptr;
+    g_scene_w = g_scene_h = 0;
     for (Texture &t : g_textures) {
         if (t.tex) t.tex->Release();
         t = Texture{};

@@ -13,12 +13,15 @@ void tick();
 
 bool active();
 
+// Ends the flight with Niko standing under the drone (F8 > Fly button, N key). Script thread only.
+void move_niko_here();
+
 // The frame from the latest tick (struct_size 0 before the first one).
 // Script thread only.
 const fpv_frame &last_frame();
 
-// Copies the latest frame for the OSD; false when no OSD should show (no drone,
-// or a third-person camera). Any thread.
+// Copies the latest frame for the lens pass and the OSD; false when no drone
+// is flying or a third-person camera is on. Any thread.
 bool osd_frame(fpv_frame *out);
 
 // Host-injected radio channels (AETR, AUX1..4, -1..1), overriding devices for 0.5 s.
@@ -31,6 +34,8 @@ struct Tuning {
     bool osd = true;
     bool armed_flight = true;  // false: the autotest leaves the drone on the ground
     bool hover = false;        // autotest hovers 2.5 m up without moving
+    bool move_niko = false;    // autotest ends with "Move Niko here" instead of F7
+    float seconds = 20;        // autotest flight length
 };
 Tuning &tuning();
 
