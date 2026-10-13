@@ -15,10 +15,13 @@ add_library(gtaiv_fpv SHARED
   src/main.cpp
   src/drone.cpp
   src/recon.cpp
+  src/world.cpp
   src/scripthook.cpp
   src/log.cpp
 )
 set_target_properties(gtaiv_fpv PROPERTIES PREFIX "" OUTPUT_NAME "GTAIV.FPV" SUFFIX ".asi")
 target_include_directories(gtaiv_fpv PRIVATE src "${LIBFPV_DIR}/include")
+# libfpv.dll is loaded at runtime; the header is only used for declarations.
+target_compile_definitions(gtaiv_fpv PRIVATE LIBFPV_STATIC)
 target_compile_options(gtaiv_fpv PRIVATE -Wall -Wextra -Wno-unused-parameter)
 target_link_options(gtaiv_fpv PRIVATE -static)

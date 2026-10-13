@@ -99,12 +99,23 @@ world collision, impacts that ragdoll/damage peds and vehicles.
   GET_GROUND_Z_FOR_3D_COORD etc. and dumps the in-memory image to GTAIV/fpv-data/recon/gtaiv-image.bin (once).
   Plan: disassemble those handlers offline (capstone via `uv run`, script in scratchpad) to find the line test.
 
+- 2026-10-13 22:43: recon ran (image base 0x700000, dump in GTAIV/fpv-data/recon, local only). Handlers (RVA):
+  GET_GROUND_Z_FOR_3D_COORD 0x7944e0, GET_CHAR_HEIGHT_ABOVE_GROUND 0x79ee70, HAS_CHAR_SPOTTED_CHAR 0x79f6d0,
+  IS_POINT_OBSCURED_BY_A_MISSION_ENTITY 0x7949f0, GET_WATER_HEIGHT_NO_WAVES 0x7de3a0.
+  Chain (VA @0x700000): native 0xe944e0 -> 0xe962d0 -> FindGroundZ 0xd523f0(x,y,z,bool*,0,4) -> vertical probe
+  0xd54510(CVector* start, float endZ, phInst* exclude, Intersection* out, typeFlags, ?) -> **general probe 0xa38880**,
+  thiscall on *(void**)0x15b9c78 (phLevel), ret 0x20: (Segment* {vec4 a, vec4 b}, Intersection* out, phInst* exclude,
+  typeFlags, -1, 7, 1, 0) -> nonzero on hit. Intersection 0x54: +0 phInst*, +0x10 position, +0x20/+0x30 vectors
+  (normal candidates, logged for the first 10 hits), +0x40 t, +0x4c part (0xffff), +0x50 material byte.
+  Disassembler: scratchpad gtadis.py (`uv run -q gtadis.py <dump> <va>`; don't name it dis.py).
+- src/world.cpp: libfpv raycast callback through that probe, types 2|4|8|64|128. Signature-checked (prologue bytes +
+  `mov ecx,[level]` at vertical probe +0x60); falls back to ground-only GET_GROUND_Z on mismatch. NOT yet tested.
+
 ## Next session — start here
-1. If GTAIV/fpv-data/recon/gtaiv-image.bin exists: disassemble the logged native handlers (GET_GROUND_Z_FOR_3D_COORD
-   first) to find ProcessLineOfSight; else ask the user to launch + load a save once.
-2. Possible polish: SET_CAM_NEAR_CLIP; Niko visible in FPV view; frame.altitude -1.
-3. Then: real world raycast (walls/buildings) — find an engine probe (e.g. the physics line test used by
-   IS_LINE_OF_SIGHT_CLEAR / ped shooting) and call it from the raycast callback.
+1. Ask the user to fly into walls/buildings/cars. Read GTAIV.FPV.log "world:" lines: which normal (nA or nB) is
+   right, distances sane. If it crashes on the first raycast, re-check the thiscall args (ret 0x20 = 8 args).
+2. Fix normal choice; map hit phInst -> entity for impacts on peds/vehicles (needs phInst -> CEntity offset).
+3. Polish: SET_CAM_NEAR_CLIP; Niko visible in FPV view; frame.altitude -1.
 4. Later: prop body, OSD/overlay via D3D9 EndScene/Present hook (DXVK is the d3d9.dll; ScriptHook ID3DHookService may help),
    audio, crash effects on peds/vehicles.
 5. Menu automation notes: mouse clicks don't reach the CE picker; prefer the user launching.

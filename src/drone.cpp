@@ -5,11 +5,11 @@
 #include <cmath>
 #include <string>
 
-#define LIBFPV_STATIC  // only for the declarations; libfpv.dll is loaded at runtime
 #include <libfpv.h>
 
 #include "log.h"
 #include "scripthook.h"
+#include "world.h"
 
 namespace drone {
 namespace {
@@ -105,25 +105,6 @@ bool load_libfpv() {
     fpv_failed = false;
     fpv_loaded = true;
     return true;
-}
-
-// First-pass collision: only the ground, from GET_GROUND_Z_FOR_3D_COORD.
-// Walls need a real world probe (see MODLOG, next steps).
-int raycast(void *, const float origin[3], const float dir[3], float max_distance,
-            fpv_raycast_hit *hit) {
-    if (dir[2] > -0.5f) return 0;
-    float ground = 0;
-    sh::call(N("GET_GROUND_Z_FOR_3D_COORD"), origin[0], origin[1], origin[2], &ground);
-    if (ground == 0 || ground > origin[2]) return 0;
-    float distance = (origin[2] - ground) / -dir[2];
-    if (distance > max_distance) return 0;
-    hit->distance = distance;
-    hit->normal[0] = 0;
-    hit->normal[1] = 0;
-    hit->normal[2] = 1;
-    hit->material = 0;
-    hit->object_id = 0;
-    return 1;
 }
 
 enum class View { Fpv, Chase, Los, Count };
@@ -226,7 +207,7 @@ void start() {
         g_drone = nullptr;
         return;
     }
-    fpv.fpv_world_set_raycast_callback(&raycast, nullptr);
+    fpv.fpv_world_set_raycast_callback(&world::raycast, nullptr);
 
     sh::call(N("SET_PLAYER_CONTROL"), g_player, false);
     sh::call(N("CREATE_CAM"), 14u, &g_cam);
