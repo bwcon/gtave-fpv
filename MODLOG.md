@@ -34,3 +34,6 @@ world collision, impacts that ragdoll/damage peds and vehicles.
 6. Prop body, OSD + overlay renderer (D3D9), audio (libfpv -> game/own output).
 
 ## Log
+- 2026-10-13: Backups: ~/.universal-modder/backups/gtaiv-profiles/20261013-185132.zip,
+  gtaiv-settings/20261013-185133.zip. Vanilla GTAIV/ root files hashed in vanilla-root-files.md5
+  (restore = delete anything in GTAIV/ not listed there, e.g. dinput8.dll, *.asi, plugins/).
