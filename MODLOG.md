@@ -37,3 +37,9 @@ world collision, impacts that ragdoll/damage peds and vehicles.
 - 2026-10-13: Backups: ~/.universal-modder/backups/gtaiv-profiles/20261013-185132.zip,
   gtaiv-settings/20261013-185133.zip. Vanilla GTAIV/ root files hashed in vanilla-root-files.md5
   (restore = delete anything in GTAIV/ not listed there, e.g. dinput8.dll, *.asi, plugins/).
+- 2026-10-13: libfpv i686 build works. Branch `win32-i686` in ~/Projects/libfpv (commit cd10d3a):
+  cmake/toolchains/mingw-w64-i686.cmake, build dir build/win32. Needs `-msse2 -mfpmath=sse`
+  (x87 default made wall_crash tunnel through the wall). 20 tests / 321 checks pass under
+  Windows via WSL interop (copy libfpv.dll next to tests/fpv_tests.exe first, else exit 53).
+  Note: build/win (x64) tests dir holds a stale libfpv.dll -> 30 bogus failures; unrelated.
+  Next: install FusionFix + Zolika ScriptHook, hello-world .asi.
