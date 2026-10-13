@@ -73,17 +73,27 @@ world collision, impacts that ragdoll/damage peds and vehicles.
     User stopped the game twice after ~2 min of nothing. Unknown whether Enter started loading.
   - User asked me to stop and continue in a later session.
 
+- 2026-10-13 22:27: **Hello-world VERIFIED in game** (user launched PlayGTAIV.exe, loaded save, F7): GTAIV.FPV.log shows
+  attached -> ScriptThread registered -> first script tick -> "F7: player 0 ped 2 at 601.42 1409.84 17.48". Root *.asi load fine.
+- Vertical slice written (src/drone.{h,cpp}), built, deployed, NOT yet tested in game:
+  - libfpv.dll loaded lazily (LoadLibrary from GTAIV/) on first F7; data_dir GTAIV/fpv-data; log -> GTAIV.FPV.log.
+  - coords: right +X, up +Z, forward +Y, 1 unit = 1 m (GTA IV world: X east, Y north, Z up).
+  - F7: drone spawns 2 m in front of Niko on GET_GROUND_Z, yaw = Niko heading; SET_PLAYER_CONTROL off;
+    CREATE_CAM 14 + ACTIVATE_SCRIPTED_CAMS; each tick SET_CAM_POS/ROT/FOV from frame.camera.
+    Euler: heading = atan2(-fx, fy), pitch = asin(fz), roll = atan2(-right.z, up.z) — **roll sign unverified**.
+  - Keys (only when game window focused): libfpv keyboard fallback W/S/A/D/arrows/Enter/T/B; C cycles FPV/chase/LOS;
+    R resets to spawn + repair; F7 back to Niko (destroys cam, restores control, deletes drone).
+  - Collision: raycast callback answers only downward rays (dir.z < -0.5) via GET_GROUND_Z_FOR_3D_COORD. No walls yet.
+  - Log line every 2 s: drone pos, flags, altitude, throttle, arming-disable text.
+  - deploy.sh now also copies ~/Projects/libfpv/build/win32/libfpv.dll to GTAIV/.
+
 ## Next session — start here
-1. Ask the user to launch the game themselves (PlayGTAIV.exe), pick GTA IV, load a save, then press F7 and tell
-   me; meanwhile read GTAIV/GTAIV.FPV.log + scripthook.log. This avoids the menu-automation problems above.
-   (Automated driving annoyed the user when it stalled; keep automation short and say what's happening.)
-2. If GTAIV.FPV.log is missing: check the ASI loader loads root *.asi (ScriptHookDotNet.asi is in root and works,
-   so it should); check scripthook.log for our thread; try moving the asi to plugins/.
-3. If it crashes on RegisterThread/tick: re-check the ScriptThread object size (ctor disassembly) and vtable.
-4. Then: vertical slice = F7 -> libfpv drone at Niko, scripted camera (CREATE_CAM 14, SET_CAM_POS/ROT,
-   ACTIVATE_SCRIPTED_CAMS) driven by fpv_drone_tick; Niko frozen (SET_PLAYER_CONTROL off). libfpv.dll from
-   ~/Projects/libfpv/build/win32 copied next to GTAIV.exe (data_dir e.g. GTAIV/fpv-data).
-5. Later: world raycast (find native/engine probe), prop body, OSD/overlay via D3D9 EndScene/Present hook
-   (note DXVK is the d3d9.dll), audio, crash effects on peds/vehicles.
-6. Menu automation notes for later: mouse clicks don't reach the CE picker; need to figure out input (maybe
-   PostMessage or keyboard scancodes) before relying on unattended runs.
+1. Ask the user to launch (PlayGTAIV.exe), load a save, press F7, try arming/flying (radio or keyboard), C, R, F7 back.
+   Then read GTAIV.FPV.log. Check: libfpv init OK, input source, camera follows, axes right (yaw/pitch/roll directions,
+   especially roll sign), drone sits on the ground instead of falling through.
+2. Fix whatever is off. Possible issues: scripted cam needs SET_CAM_NEAR_CLIP; FOV range; Niko visible in FPV view.
+3. Then: real world raycast (walls/buildings) — find an engine probe (e.g. the physics line test used by
+   IS_LINE_OF_SIGHT_CLEAR / ped shooting) and call it from the raycast callback.
+4. Later: prop body, OSD/overlay via D3D9 EndScene/Present hook (DXVK is the d3d9.dll; ScriptHook ID3DHookService may help),
+   audio, crash effects on peds/vehicles.
+5. Menu automation notes: mouse clicks don't reach the CE picker; prefer the user launching.
