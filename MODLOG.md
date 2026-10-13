@@ -171,10 +171,14 @@ world collision, impacts that ragdoll/damage peds and vehicles.
   Fix: edge detectors treat a key's first reading as a baseline (core.cpp/drone.cpp). Tell the user; pressing F8
   physically should clear it.
 
+- 2026-10-13 23:35: Probes ignore the player (VERIFIED: sweep down ray from Niko's head now hits the road at 2.01 m).
+  CEntity+0x38 = phInst (back-link checked), passed as the probe's `exclude`; that alone wasn't enough (peds have more
+  instances, e.g. the ragdoll frag), so hits on the ignored entity restart the probe 25 cm further (max 8 times).
+  Ped handle -> entity via the pool (index = handle>>8, flags must match). SET_CAM_NEAR_CLIP(cam, 0.05).
+  autotest.txt deleted after testing.
+
 ## Next session — start here
 1. Check the overlay with real mouse use (GTA may clip/hide the cursor; GetCursorPos may stick) - needs the user.
-2. Exclude the player ped from probes (pass Niko's phInst as `exclude`; CPed's phInst offset TBD) — the drone can
-   currently bump into frozen Niko (no effect is applied to him).
-3. Polish: SET_CAM_NEAR_CLIP; hide Niko in FPV view?; frame.altitude -1 when > a few m up; tune effect strengths.
+3. Polish: frame.altitude -1 when > a few m up (libfpv probe range?); tune effect strengths with the user.
 4. Prop body (visible drone model for chase/LOS cams), audio (fpv_audio_read -> XAudio2/waveOut).
 5. Delete GTAIV/fpv-data/autotest.txt before handing the game back to the user.

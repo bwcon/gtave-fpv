@@ -127,10 +127,12 @@ void start() {
         g_drone = nullptr;
         return;
     }
+    world::ignore_ped(ped);
     fpv.fpv_world_set_raycast_callback(&world::raycast, nullptr);
 
     sh::call(N("SET_PLAYER_CONTROL"), g_player, false);
     sh::call(N("CREATE_CAM"), 14u, &g_cam);
+    sh::call(N("SET_CAM_NEAR_CLIP"), g_cam, 0.05f);  // the FPV camera sits a few cm from walls
     sh::call(N("SET_CAM_ACTIVE"), g_cam, true);
     sh::call(N("SET_CAM_PROPAGATE"), g_cam, true);
     sh::call(N("ACTIVATE_SCRIPTED_CAMS"), true, true);
@@ -159,6 +161,7 @@ void stop() {
     sh::call(N("SET_PLAYER_CONTROL"), g_player, true);
     if (g_drone) {
         fpv.fpv_world_set_raycast_callback(nullptr, nullptr);
+        world::ignore_ped(0);
         fpv.fpv_drone_delete(g_drone);
         g_drone = nullptr;
     }

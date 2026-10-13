@@ -76,6 +76,8 @@ ProbeFn g_probe = nullptr;
 void **g_level = nullptr;
 bool g_checked = false;
 Pool **g_pools[3] = {};
+void *g_exclude = nullptr;         // phInst the probes ignore
+void *g_exclude_entity = nullptr;  // and anything else of this entity (peds have more than one inst)
 
 bool resolve() {
     if (g_checked) return g_probe != nullptr;
@@ -152,6 +154,15 @@ uint32_t classify(void *entity) {
     return uint32_t(Kind::Other) << 28;
 }
 
+// Entity behind a script handle, or null (the pool's handle -> pointer, 0x799d20).
+void *entity_from_handle(Kind kind, uint32_t handle) {
+    int i = int(kind) - 1;
+    Pool *pool = (i >= 0 && i < 3 && g_pools[i]) ? *g_pools[i] : nullptr;
+    uint32_t index = handle >> 8;
+    if (!pool || index >= pool->count || pool->flags[index] != (handle & 0xff)) return nullptr;
+    return pool->objects + index * pool->entry_size;
+}
+
 bool usable_normal(const Vec4 &n, const float dir[3]) {
     float len2 = n.x * n.x + n.y * n.y + n.z * n.z;
     return len2 > 0.81f && len2 < 1.21f && n.x * dir[0] + n.y * dir[1] + n.z * dir[2] < 0;
@@ -167,17 +178,25 @@ int raycast(void *, const float origin[3], const float dir[3], float max_distanc
     seg.b = {origin[0] + dir[0] * max_distance, origin[1] + dir[1] * max_distance,
              origin[2] + dir[2] * max_distance, 0};
     Intersection is{};
-    is.part = 0xffff;
-    // Same trailing arguments as the game's own ground probe; types: static,
-    // buildings, vehicles, peds, objects.
-    if (!g_probe(*g_level, &seg, &is, nullptr, kTypeAll, -1, 7, 1, 0)) return 0;
+    void *entity = nullptr;
+    for (int attempt = 0;; ++attempt) {
+        is = Intersection{};
+        is.part = 0xffff;
+        // Same trailing arguments as the game's own ground probe; types: static,
+        // buildings, vehicles, peds, objects.
+        if (!g_probe(*g_level, &seg, &is, g_exclude, kTypeAll, -1, 7, 1, 0)) return 0;
+        entity = entity_of(is.inst);
+        if (!g_exclude_entity || entity != g_exclude_entity || attempt == 8) break;
+        // Hit the ignored ped through another of its instances: continue past it.
+        seg.a = {is.position.x + dir[0] * 0.25f, is.position.y + dir[1] * 0.25f, is.position.z + dir[2] * 0.25f, 0};
+    }
+    if (entity && entity == g_exclude_entity) return 0;
 
     float dx = is.position.x - origin[0], dy = is.position.y - origin[1], dz = is.position.z - origin[2];
     float distance = dx * dir[0] + dy * dir[1] + dz * dir[2];
     if (distance < 0 || distance > max_distance) return 0;
 
     const Vec4 &n = usable_normal(is.normal_a, dir) ? is.normal_a : is.normal_b;
-    void *entity = entity_of(is.inst);
     uint32_t object_id = classify(entity);
     static void *last_entity = nullptr;
     static int traced = 0;
@@ -202,6 +221,22 @@ int raycast(void *, const float origin[3], const float dir[3], float max_distanc
     hit->material = 0;
     hit->object_id = object_id;
     return 1;
+}
+
+void ignore_ped(uint32_t ped_handle) {
+    g_exclude = g_exclude_entity = nullptr;
+    if (!ped_handle || !resolve()) return;
+    auto entity = static_cast<uint8_t *>(entity_from_handle(Kind::Ped, ped_handle));
+    // CEntity+0x38 = phInst (IV-SDK); trust it only if the instance points back.
+    void *inst = entity ? *reinterpret_cast<void **>(entity + 0x38) : nullptr;
+    g_exclude_entity = entity;
+    if (inst && entity_of(inst) == entity) {
+        g_exclude = inst;
+        fpvlog::write("world: probes ignore ped %u (entity %p inst %p)", ped_handle, static_cast<void *>(entity), inst);
+    } else {
+        fpvlog::write("world: cannot resolve ped %u's phInst (entity %p inst %p)", ped_handle,
+                      static_cast<void *>(entity), inst);
+    }
 }
 
 }  // namespace world

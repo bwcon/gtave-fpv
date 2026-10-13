@@ -128,7 +128,8 @@ void probe_sweep() {
     uint32_t ped = player_ped();
     float o[3];
     sh::call(N("GET_CHAR_COORDINATES"), ped, &o[0], &o[1], &o[2]);
-    o[2] += 1.0f;  // above Niko's head so he doesn't block the rays
+    o[2] += 1.0f;
+    world::ignore_ped(ped);  // the down ray should find the road, not Niko's head
     fpvlog::write("autotest: probe sweep from %.2f %.2f %.2f", o[0], o[1], o[2]);
     for (int i = 0; i < 8; ++i) {
         float a = float(i) * 0.785398f;
