@@ -17,7 +17,8 @@ world collision, impacts that ragdoll/damage peds and vehicles.
 
 ## Decisions (agreed with user)
 1. 32-bit bridge: add an i686 MinGW toolchain to libfpv and load libfpv in-process.
-2. Loader stack: FusionFix (ASI loader) + Zolika's ScriptHook; mod is a native .asi.
+2. Loader stack: FusionFix (ASI loader, dinput8.dll) + Tomasak's .Net ScriptHook pack (user-installed;
+   ships Aru's C++ ScriptHook.dll 0.5.1, which auto-detects 1.2.0.59). Mod is a native .asi.
 3. Drone body: a small vanilla prop; collision via the game's world probe through
    fpv_world_set_raycast_callback.
 4. Extras in v1: crash effects on peds/vehicles (ragdoll + damage). No fisheye, no kamikaze, no clip.
@@ -43,3 +44,46 @@ world collision, impacts that ragdoll/damage peds and vehicles.
   Windows via WSL interop (copy libfpv.dll next to tests/fpv_tests.exe first, else exit 53).
   Note: build/win (x64) tests dir holds a stale libfpv.dll -> 30 bogus failures; unrelated.
   Next: install FusionFix + Zolika ScriptHook, hello-world .asi.
+- 2026-10-13: User installed FusionFix + Tomasak's ScriptHook pack. New files in GTAIV/:
+  dinput8.dll (ASI loader), d3d9.dll + vulkan.dll + d3d9.cfg (DXVK from FusionFix), plugins/GTAIV.EFLC.FusionFix.{asi,ini,cfg},
+  update/, ScriptHook.dll, ScriptHookDotNet.asi, aCompleteEditionHook.asi, scripts/. scripthook.log (19:15 run, user's
+  test) shows "Using game version Dynamic (1.2.0.59)" and ScriptHookDotNet initialised -> the hook works on this exe.
+- **User launches with GTAIV/PlayGTAIV.exe, NOT Steam** (a Steam update could wipe the mod). Do the same.
+- ScriptHook API: Aru's SDK headers cloned to ~/gtaiv-ref/gtaiv-scripthook-sdk (github violetfrost/gtaiv-scripthook-sdk;
+  reference only, Aru's license, don't commit). ScriptHook.dll exports MSVC C++ only, so src/scripthook.{h,cpp} is a
+  MinGW shim: GetProcAddress on mangled names, ScriptThread built by hand (ctor ??0ScriptThread@@QAE@XZ via thiscall,
+  copy its vtable incl. RTTI slot [-1], override [0] RunTick and [4] scalar deleting dtor; vtable order verified from
+  ??_7ScriptThread@@6B@: RunTick, RunScript, OnStart, OnKill, dtor). Register with
+  ?RegisterThread@ScriptHookManager@@SAXPAVScriptThread@@@Z (cdecl). Natives via
+  ?SpeedyInvoke@NativeInvoke@@CAXPAVNativeContext@@I@Z (cdecl, ctx layout in scripthook.h).
+  Native hash = joaat(lowercase name) (verified: get_player_id = 0x1cc648ea matches SDK). Macro N("NAME").
+  ScriptHook also exports ID3DHookService / IKeyboardHookService (vtables dumped with
+  scratch script; not used yet; could be useful for OSD drawing).
+- Hello-world .asi built (build: `cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=cmake/mingw-w64-i686.cmake && cmake --build build`,
+  deploy: ./deploy.sh -> GTAIV/GTAIV.FPV.asi). Writes GTAIV/GTAIV.FPV.log ("attached", "ScriptThread registered",
+  "first script tick"); F7 logs Niko's coords and prints a help text. **NOT YET VERIFIED IN GAME.**
+- Added GTAIV/commandline.txt (-windowed -width 1280 -height 720) for stable screenshots. Undo: delete it.
+- Testing attempts (2026-10-13 ~19:25):
+  - `um win launch <exe>` timed out (cmd.exe started from a /mnt/d cwd); launch from /mnt/c instead:
+    `cd /mnt/c && cmd.exe /c start "" "D:\...\GTAIV\PlayGTAIV.exe"`. `um win setup` done (ffmpeg gfxcapture, h264_qsv).
+  - Game opened the CE episode picker (GTA IV / EFLC), still 1920x1080 fullscreen (commandline.txt not applied
+    at that stage?). Screenshots come out 1920x1080 regardless of --scale. Window rect 0 0 1920 1080.
+  - WinDrive `click` did nothing (cursor didn't move); `scanmode on` + `key 0x0D` sent but no visible progress.
+  - **No .asi loaded at the picker**: scripthook.log / ScriptHookDotNet.log not rewritten, no GTAIV.FPV.log.
+    User stopped the game twice after ~2 min of nothing. Unknown whether Enter started loading.
+  - User asked me to stop and continue in a later session.
+
+## Next session — start here
+1. Ask the user to launch the game themselves (PlayGTAIV.exe), pick GTA IV, load a save, then press F7 and tell
+   me; meanwhile read GTAIV/GTAIV.FPV.log + scripthook.log. This avoids the menu-automation problems above.
+   (Automated driving annoyed the user when it stalled; keep automation short and say what's happening.)
+2. If GTAIV.FPV.log is missing: check the ASI loader loads root *.asi (ScriptHookDotNet.asi is in root and works,
+   so it should); check scripthook.log for our thread; try moving the asi to plugins/.
+3. If it crashes on RegisterThread/tick: re-check the ScriptThread object size (ctor disassembly) and vtable.
+4. Then: vertical slice = F7 -> libfpv drone at Niko, scripted camera (CREATE_CAM 14, SET_CAM_POS/ROT,
+   ACTIVATE_SCRIPTED_CAMS) driven by fpv_drone_tick; Niko frozen (SET_PLAYER_CONTROL off). libfpv.dll from
+   ~/Projects/libfpv/build/win32 copied next to GTAIV.exe (data_dir e.g. GTAIV/fpv-data).
+5. Later: world raycast (find native/engine probe), prop body, OSD/overlay via D3D9 EndScene/Present hook
+   (note DXVK is the d3d9.dll), audio, crash effects on peds/vehicles.
+6. Menu automation notes for later: mouse clicks don't reach the CE picker; need to figure out input (maybe
+   PostMessage or keyboard scancodes) before relying on unattended runs.
