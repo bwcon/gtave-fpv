@@ -179,6 +179,7 @@ world collision, impacts that ragdoll/damage peds and vehicles.
 
 ## Next session — start here
 1. Check the overlay with real mouse use (GTA may clip/hide the cursor; GetCursorPos may stick) - needs the user.
-3. Polish: frame.altitude -1 when > a few m up (libfpv probe range?); tune effect strengths with the user.
-4. Prop body (visible drone model for chase/LOS cams), audio (fpv_audio_read -> XAudio2/waveOut).
+2. Polish: frame.altitude -1 when > a few m up (libfpv probe range?); tune effect strengths with the user.
+3. Prop body (visible drone model for chase/LOS cams), audio (fpv_audio_read -> XAudio2/waveOut).
+4. Self-test with scratchpad run_test.sh (recreate from the MODLOG notes if the scratchpad is gone).
 5. Delete GTAIV/fpv-data/autotest.txt before handing the game back to the user.
