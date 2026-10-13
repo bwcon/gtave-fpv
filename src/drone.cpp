@@ -34,6 +34,7 @@ struct Api {
     FPV_FN(fpv_drone_tick)
     FPV_FN(fpv_input_key)
     FPV_FN(fpv_input_get_status)
+    FPV_FN(fpv_input_set_channels)
 #undef FPV_FN
 };
 
@@ -85,6 +86,7 @@ bool load_libfpv() {
     FPV_FN(fpv_drone_tick)
     FPV_FN(fpv_input_key)
     FPV_FN(fpv_input_get_status)
+    FPV_FN(fpv_input_set_channels)
 #undef FPV_FN
     if (!ok) return false;
 
@@ -116,6 +118,7 @@ View g_view = View::Fpv;
 float g_spawn_pos[3];
 float g_spawn_rot[4];
 LARGE_INTEGER g_last_tick;
+fpv_frame g_frame{};
 
 uint32_t player_index() {
     return sh::call<uint32_t>(N("CONVERT_INT_TO_PLAYERINDEX"), sh::call<uint32_t>(N("GET_PLAYER_ID")));
@@ -247,7 +250,13 @@ void stop() {
 
 }  // namespace
 
+void inject_channels(const float channels[8]) {
+    if (fpv_loaded) fpv.fpv_input_set_channels(channels, 8);
+}
+
 bool active() { return g_drone != nullptr; }
+
+const fpv_frame &last_frame() { return g_frame; }
 
 void toggle() {
     if (active())
@@ -281,12 +290,21 @@ void tick() {
         if (reported++ < 5) fpvlog::write("fpv_drone_tick: %s", fpv.fpv_result_string(r));
         return;
     }
+    g_frame = frame;
     apply_camera(g_view == View::Fpv ? frame.camera : g_view == View::Chase ? frame.chase_camera : frame.los_camera);
+
+    for (uint32_t i = 0; i < frame.impact_count && i < FPV_MAX_IMPACTS; ++i) {
+        const fpv_impact &im = frame.impacts[i];
+        if (im.speed < 1.0f) continue;  // resting contact
+        fpvlog::write("impact at %.2f %.2f %.2f n %.2f %.2f %.2f speed %.1f impulse %.2f motor %d", im.position[0],
+                      im.position[1], im.position[2], im.normal[0], im.normal[1], im.normal[2], im.speed, im.impulse,
+                      int(im.motor_index));
+    }
 
     // Sparse trace for debugging the axes and the camera mapping.
     static float log_timer = 0;
     log_timer += dt;
-    if (log_timer > 2.0f) {
+    if (log_timer > 1.0f) {
         log_timer = 0;
         fpvlog::write("drone pos %.2f %.2f %.2f flags 0x%x alt %.2f thr %.2f arm '%s'", frame.position[0],
                       frame.position[1], frame.position[2], frame.flags, frame.altitude, frame.channels[2],

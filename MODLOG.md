@@ -111,11 +111,28 @@ world collision, impacts that ragdoll/damage peds and vehicles.
 - src/world.cpp: libfpv raycast callback through that probe, types 2|4|8|64|128. Signature-checked (prologue bytes +
   `mov ecx,[level]` at vertical probe +0x60); falls back to ground-only GET_GROUND_Z on mismatch. NOT yet tested.
 
+- 2026-10-13 22:50-22:57: **World collision VERIFIED (self-tested, user asked me to test myself).**
+  Probe sweep indoors (Niko's Broker apartment): walls 3-9 m, normals clean; nA == nB always (use either). Outdoors
+  (road 585,1410,10): buildings ~12 m each side, open along the road. Drone: climbed, hit the apartment ceiling (n 0,0,-1);
+  run 2 cruised into a building wall at x=597 (n -1,0,0), prop strike, crash, fell and landed on the street (n up).
+  Rays include peds (type 64): a down ray from Niko's head hits Niko himself (inst differs). Fine for now.
+- Radio: input source was KEYBOARD ("needs setup", overlay not drawn yet). Copied the user's sm64ex mapping
+  (C:/Users/Hammerill/AppData/Roaming/sm64ex/libfpv-data/radio_mappings.json) into GTAIV/fpv-data -> source RADIO.
+- **Self-test workflow** (src/autotest.cpp): touch GTAIV/fpv-data/autotest.txt -> 10 s later (also on game start if the
+  file exists) it moves Niko to the nearest road (GET_CLOSEST_CAR_NODE + LOAD_SCENE), logs an 8-way + down probe
+  sweep, launches the drone and flies via fpv_input_set_channels: arm at 2 s, altitude hold (+4 m target; hover is
+  about thr -0.7 in ANGLE), pitch 0.25 from 7 s, stops at 20 s. **Delete autotest.txt before handing back to the user**
+  (otherwise every game start teleports Niko). Loop: kill exact GTAIV pid (`um win ps`), ./deploy.sh, relaunch from /mnt/c
+  with `timeout 10 cmd.exe /c start "" "D:\...\GTAIV\PlayGTAIV.exe"` (no episode picker appeared, loads straight
+  into the save ~18 s), wait for "autotest: flying" in the log, `um win shot --exe GTAIV.exe x.png --scale 0.33`.
+  Check `um win drive --proc explorer idle` first.
+- Throttle note: 5" PropEater hovers near thr -0.7 (15% stick); thr 0.1 shot it to 700 m in 18 s.
+
 ## Next session — start here
-1. Ask the user to fly into walls/buildings/cars. Read GTAIV.FPV.log "world:" lines: which normal (nA or nB) is
-   right, distances sane. If it crashes on the first raycast, re-check the thiscall args (ret 0x20 = 8 args).
-2. Fix normal choice; map hit phInst -> entity for impacts on peds/vehicles (needs phInst -> CEntity offset).
-3. Polish: SET_CAM_NEAR_CLIP; Niko visible in FPV view; frame.altitude -1.
-4. Later: prop body, OSD/overlay via D3D9 EndScene/Present hook (DXVK is the d3d9.dll; ScriptHook ID3DHookService may help),
-   audio, crash effects on peds/vehicles.
-5. Menu automation notes: mouse clicks don't reach the CE picker; prefer the user launching.
+1. Impacts on peds/vehicles: map Intersection.inst (phInst*) -> CEntity (find the offset, e.g. via IV-SDK phInstGta
+   m_pEntity), report object_id to libfpv, and on fpv_impact apply ragdoll/damage via natives (SWITCH_PED_TO_RAGDOLL,
+   DAMAGE_CHAR / APPLY_FORCE_TO_CAR or similar). Test with autotest variant flying at a spawned ped/car.
+2. Exclude the player ped from probes (pass its phInst as `exclude`) once the entity mapping exists.
+3. Polish: SET_CAM_NEAR_CLIP; Niko visible in FPV view; frame.altitude -1 when > a few m up.
+4. OSD/F8 overlay via D3D9 Present hook (DXVK is the d3d9.dll; ScriptHook ID3DHookService may help), prop body, audio.
+5. Delete GTAIV/fpv-data/autotest.txt when done testing.

@@ -1,6 +1,7 @@
 // GTA IV FPV drone mode, powered by libfpv.
 #include <windows.h>
 
+#include "autotest.h"
 #include "drone.h"
 #include "log.h"
 #include "recon.h"
@@ -24,6 +25,7 @@ void tick() {
         recon::run_once();
     }
     if (key_pressed(VK_F7)) drone::toggle();
+    autotest::tick();
     drone::tick();
 }
 
