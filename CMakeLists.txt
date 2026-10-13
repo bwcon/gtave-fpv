@@ -25,7 +25,9 @@ add_library(gtaiv_fpv_core SHARED
   src/autotest.cpp
   src/drone.cpp
   src/effects.cpp
+  src/fpvapi.cpp
   src/recon.cpp
+  src/render.cpp
   src/world.cpp
   src/scripthook.cpp
   src/log.cpp

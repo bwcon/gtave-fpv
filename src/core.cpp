@@ -6,14 +6,17 @@
 #include "drone.h"
 #include "log.h"
 #include "recon.h"
+#include "render.h"
 
 namespace {
 
+// The first reading of each key is only a baseline (see drone.cpp).
 bool key_pressed(int vk) {
-    static bool was_down[256];
+    static bool was_down[256], seen[256];
     bool down = (GetAsyncKeyState(vk) & 0x8000) != 0;
-    bool pressed = down && !was_down[vk];
+    bool pressed = seen[vk] && down && !was_down[vk];
     was_down[vk] = down;
+    seen[vk] = true;
     return pressed;
 }
 
@@ -32,6 +35,10 @@ void tick() {
 }  // namespace
 
 extern "C" __declspec(dllexport) void gtaiv_fpv_core_tick() { tick(); }
+
+// The loader's D3D hook, on the render thread.
+extern "C" __declspec(dllexport) void gtaiv_fpv_core_render(IDirect3DDevice9 *dev) { render::frame(dev); }
+extern "C" __declspec(dllexport) void gtaiv_fpv_core_release_d3d() { render::release(); }
 
 // Called before the loader unloads this core: leave nothing pointing into it.
 extern "C" __declspec(dllexport) void gtaiv_fpv_core_unload() {

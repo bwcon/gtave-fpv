@@ -3,11 +3,9 @@
 #include <windows.h>
 
 #include <cmath>
-#include <string>
-
-#include <libfpv.h>
-
+#include <mutex>
 #include "effects.h"
+#include "fpvapi.h"
 #include "log.h"
 #include "scripthook.h"
 #include "world.h"
@@ -17,103 +15,7 @@ namespace {
 
 constexpr float kRadToDeg = 57.2957795f;
 
-// libfpv.dll is loaded on the first launch so a missing or broken DLL never
-// stops the game (or the rest of the mod) from starting.
-struct Api {
-#define FPV_FN(name) decltype(&::name) name = nullptr;
-    FPV_FN(fpv_global_config_defaults)
-    FPV_FN(fpv_global_init)
-    FPV_FN(fpv_last_error)
-    FPV_FN(fpv_result_string)
-    FPV_FN(fpv_version_string)
-    FPV_FN(fpv_world_set_raycast_callback)
-    FPV_FN(fpv_drone_desc_defaults)
-    FPV_FN(fpv_drone_create)
-    FPV_FN(fpv_drone_delete)
-    FPV_FN(fpv_drone_reset)
-    FPV_FN(fpv_drone_repair)
-    FPV_FN(fpv_drone_tick)
-    FPV_FN(fpv_input_key)
-    FPV_FN(fpv_input_get_status)
-    FPV_FN(fpv_input_set_channels)
-#undef FPV_FN
-};
-
-Api fpv;
-bool fpv_loaded = false;
-bool fpv_failed = false;
-
-std::string game_dir() {
-    char path[MAX_PATH];
-    DWORD n = GetModuleFileNameA(nullptr, path, MAX_PATH);
-    std::string dir(path, n);
-    return dir.substr(0, dir.find_last_of("\\/"));
-}
-
-void on_fpv_log(void *, fpv_log_level level, const char *message) {
-    static const char *names[] = {"debug", "info", "warn", "error"};
-    fpvlog::write("libfpv %s: %s", names[level & 3], message);
-}
-
-bool load_libfpv() {
-    if (fpv_loaded) return true;
-    if (fpv_failed) return false;
-    fpv_failed = true;  // until proven otherwise; don't retry every key press
-
-    std::string dll = game_dir() + "\\libfpv.dll";
-    HMODULE lib = LoadLibraryA(dll.c_str());
-    if (!lib) {
-        fpvlog::write("cannot load %s (error %lu)", dll.c_str(), GetLastError());
-        return false;
-    }
-    bool ok = true;
-#define FPV_FN(name)                                                                  \
-    fpv.name = reinterpret_cast<decltype(fpv.name)>(reinterpret_cast<void *>(GetProcAddress(lib, #name))); \
-    if (!fpv.name) {                                                                   \
-        fpvlog::write("libfpv.dll has no %s", #name);                                  \
-        ok = false;                                                                    \
-    }
-    FPV_FN(fpv_global_config_defaults)
-    FPV_FN(fpv_global_init)
-    FPV_FN(fpv_last_error)
-    FPV_FN(fpv_result_string)
-    FPV_FN(fpv_version_string)
-    FPV_FN(fpv_world_set_raycast_callback)
-    FPV_FN(fpv_drone_desc_defaults)
-    FPV_FN(fpv_drone_create)
-    FPV_FN(fpv_drone_delete)
-    FPV_FN(fpv_drone_reset)
-    FPV_FN(fpv_drone_repair)
-    FPV_FN(fpv_drone_tick)
-    FPV_FN(fpv_input_key)
-    FPV_FN(fpv_input_get_status)
-    FPV_FN(fpv_input_set_channels)
-#undef FPV_FN
-    if (!ok) return false;
-
-    std::string data_dir = game_dir() + "\\fpv-data";
-    fpv_global_config cfg;
-    fpv.fpv_global_config_defaults(&cfg);
-    cfg.data_dir = data_dir.c_str();
-    // GTA IV: metres, X east, Y north, Z up.
-    cfg.coords = {FPV_AXIS_POS_X, FPV_AXIS_POS_Z, FPV_AXIS_POS_Y, 1.0f};
-    // Prefer the loader's callback: libfpv keeps it across core reloads.
-    if (auto loader_log = reinterpret_cast<fpv_log_fn>(reinterpret_cast<void *>(
-            GetProcAddress(GetModuleHandleA("GTAIV.FPV.asi"), "gtaiv_fpv_libfpv_log"))))
-        cfg.log = loader_log;
-    else
-        cfg.log = &on_fpv_log;
-    cfg.log_level = FPV_LOG_INFO;
-    fpv_result r = fpv.fpv_global_init(&cfg);
-    if (r != FPV_OK && r != FPV_ERROR_ALREADY_INITIALIZED) {
-        fpvlog::write("fpv_global_init: %s (%s)", fpv.fpv_result_string(r), fpv.fpv_last_error());
-        return false;
-    }
-    fpvlog::write("libfpv %s initialised, data in %s", fpv.fpv_version_string(), data_dir.c_str());
-    fpv_failed = false;
-    fpv_loaded = true;
-    return true;
-}
+using fpvapi::fpv;
 
 enum class View { Fpv, Chase, Los, Count };
 
@@ -125,6 +27,9 @@ float g_spawn_pos[3];
 float g_spawn_rot[4];
 LARGE_INTEGER g_last_tick;
 fpv_frame g_frame{};
+std::mutex g_osd_mutex;  // guards g_osd_frame / g_osd_visible for the render thread
+fpv_frame g_osd_frame{};
+bool g_osd_visible = false;
 
 uint32_t player_index() {
     return sh::call<uint32_t>(N("CONVERT_INT_TO_PLAYERINDEX"), sh::call<uint32_t>(N("GET_PLAYER_ID")));
@@ -141,28 +46,34 @@ bool game_has_focus() {
 }
 
 // Keyboard fallback for players without a radio (libfpv: W/S throttle, A/D yaw,
-// arrows pitch/roll, Enter arms, T turtle, B beeper).
+// arrows pitch/roll, Enter arms, T turtle, B beeper) and the F8 overlay's keys.
 void forward_keys() {
     struct Key { int vk; int fpv; };
     static const Key keys[] = {
         {'W', 'W'}, {'A', 'A'}, {'S', 'S'}, {'D', 'D'}, {'T', 'T'}, {'B', 'B'},
         {VK_RETURN, FPV_KEY_ENTER}, {VK_LEFT, FPV_KEY_LEFT}, {VK_RIGHT, FPV_KEY_RIGHT},
-        {VK_UP, FPV_KEY_UP}, {VK_DOWN, FPV_KEY_DOWN},
+        {VK_UP, FPV_KEY_UP}, {VK_DOWN, FPV_KEY_DOWN}, {VK_F8, FPV_KEY_F8}, {VK_ESCAPE, FPV_KEY_ESCAPE},
+        {VK_TAB, FPV_KEY_TAB}, {VK_BACK, FPV_KEY_BACKSPACE}, {VK_SPACE, FPV_KEY_SPACE},
     };
     static bool was_down[sizeof(keys) / sizeof(keys[0])];
+    static bool primed = false;  // a key already held when we start is not a press
     bool focus = game_has_focus();
     for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i) {
         bool down = focus && (GetAsyncKeyState(keys[i].vk) & 0x8000) != 0;
-        if (down != was_down[i]) fpv.fpv_input_key(keys[i].fpv, down);
+        if (primed && down != was_down[i]) fpv.fpv_input_key(keys[i].fpv, down);
         was_down[i] = down;
     }
+    primed = true;
 }
 
+// Edge-detected key press. The first reading of each key is only a baseline,
+// so a key that is already held (or stuck) never counts as a press.
 bool key_pressed(int vk) {
-    static bool was_down[256];
+    static bool was_down[256], seen[256];
     bool down = game_has_focus() && (GetAsyncKeyState(vk) & 0x8000) != 0;
-    bool pressed = down && !was_down[vk];
+    bool pressed = seen[vk] && down && !was_down[vk];
     was_down[vk] = down;
+    seen[vk] = true;
     return pressed;
 }
 
@@ -179,7 +90,7 @@ void apply_camera(const fpv_camera &c) {
 }
 
 void start() {
-    if (!load_libfpv()) {
+    if (!fpvapi::load()) {
         print("FPV: libfpv failed to load, see GTAIV.FPV.log");
         return;
     }
@@ -251,18 +162,29 @@ void stop() {
         fpv.fpv_drone_delete(g_drone);
         g_drone = nullptr;
     }
+    {
+        std::lock_guard<std::mutex> lock(g_osd_mutex);
+        g_osd_visible = false;
+    }
     fpvlog::write("drone stopped");
 }
 
 }  // namespace
 
 void inject_channels(const float channels[8]) {
-    if (fpv_loaded) fpv.fpv_input_set_channels(channels, 8);
+    if (fpvapi::loaded()) fpv.fpv_input_set_channels(channels, 8);
 }
 
 bool active() { return g_drone != nullptr; }
 
 const fpv_frame &last_frame() { return g_frame; }
+
+bool osd_frame(fpv_frame *out) {
+    std::lock_guard<std::mutex> lock(g_osd_mutex);
+    if (!g_osd_visible) return false;
+    *out = g_osd_frame;
+    return true;
+}
 
 void toggle() {
     if (active())
@@ -271,7 +193,25 @@ void toggle() {
         start();
 }
 
+// While the overlay is open on foot, Niko must not walk around as you type.
+void hold_player_for_overlay() {
+    static bool held = false;
+    bool open = fpv.fpv_overlay_wants_input() != 0;
+    if (g_drone || open == held) return;
+    sh::call(N("SET_PLAYER_CONTROL"), player_index(), !open);
+    held = open;
+}
+
 void tick() {
+    if (!fpvapi::loaded()) {
+        if (key_pressed(VK_F8)) {  // F8 opens the overlay before the first flight too
+            fpvlog::write("F8 pressed (state 0x%04x), loading libfpv", unsigned(GetAsyncKeyState(VK_F8)) & 0xffffu);
+            fpvapi::load();
+        }
+        return;
+    }
+    forward_keys();
+    hold_player_for_overlay();
     if (!g_drone) return;
 
     LARGE_INTEGER now, freq;
@@ -281,11 +221,13 @@ void tick() {
     g_last_tick = now;
     if (dt > 0.1f) dt = 0.1f;
 
-    forward_keys();
-    if (key_pressed('C')) g_view = View((int(g_view) + 1) % int(View::Count));
-    if (key_pressed('R')) {
-        fpv.fpv_drone_reset(g_drone, g_spawn_pos, g_spawn_rot);
-        fpv.fpv_drone_repair(g_drone);
+    bool camera_key = key_pressed('C'), reset_key = key_pressed('R');
+    if (!fpv.fpv_overlay_wants_input()) {  // otherwise the keys belong to the overlay
+        if (camera_key) g_view = View((int(g_view) + 1) % int(View::Count));
+        if (reset_key) {
+            fpv.fpv_drone_reset(g_drone, g_spawn_pos, g_spawn_rot);
+            fpv.fpv_drone_repair(g_drone);
+        }
     }
 
     fpv_frame frame{};
@@ -297,6 +239,11 @@ void tick() {
         return;
     }
     g_frame = frame;
+    {
+        std::lock_guard<std::mutex> lock(g_osd_mutex);
+        g_osd_frame = frame;
+        g_osd_visible = g_view == View::Fpv;
+    }
     apply_camera(g_view == View::Fpv ? frame.camera : g_view == View::Chase ? frame.chase_camera : frame.los_camera);
 
     for (uint32_t i = 0; i < frame.impact_count && i < FPV_MAX_IMPACTS; ++i) {

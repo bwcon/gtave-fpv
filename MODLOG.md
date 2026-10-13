@@ -153,9 +153,26 @@ world collision, impacts that ragdoll/damage peds and vehicles.
   log lines; 4 screenshots). Autotest now faces north on the Broker road (585,1410) with the target 16 m ahead,
   holds 0.7 m, pitch 0.5.
 
+- 2026-10-13 23:28: **OSD + F8 overlay VERIFIED on screen (self-tested).** Loader registers a hand-built
+  ID3DDeviceHook with ScriptHook's "D3DHook" service (RequestService export, AddDeviceHook = service vtable [5];
+  hook vtable: OnCreateDevice, OnResetDevice, OnLostDevice, OnDestroyDevice, OnRender, all thiscall) on its first
+  tick. OnRender (render thread) -> core gtaiv_fpv_core_render under a shared SRWLOCK; reload takes it exclusively and
+  first asks the render thread to free the core's textures (event, 500 ms timeout). src/render.cpp: fixed-function
+  XYZRHW|DIFFUSE|TEX1, DrawIndexedPrimitiveUP with INDEX32, managed A8R8G8B8 font textures (RGBA->BGRA, re-upload on
+  revision), per-frame D3DSBT_ALL state block + RT/DS save (ImGui DX9 backend style). OSD (analog style) from a
+  mutex-guarded frame copy, only in the FPV view. Overlay mouse from GetCursorPos on the device's focus window; libfpv
+  draws its own cursor and has keyboard nav. Screenshots showed Betaflight OSD (25.7 V, 4.28 V/cell, timer, ANGL,
+  amps) and the overlay's Fly tab (arming-disable reasons, motor/prop state).
+- libfpv code moved to src/fpvapi.{h,cpp} (FPV_FUNCTIONS X-macro). F8 loads libfpv on foot too; while the overlay
+  wants input on foot, SET_PLAYER_CONTROL off. Forwarded keys now also F8, Esc, Tab, Backspace, Space.
+- Log fix: loader truncates once, then loader and core both append (loader "w" used to overwrite core lines).
+- **F8 is stuck "down" system-wide on the user's PC** (GetAsyncKeyState 0x77 & 0x8000 from a separate process,
+  scratchpad keys.exe -> C:/Users/Hammerill/AppData/Local/Temp/fpv-keys.exe). It opened the overlay at startup.
+  Fix: edge detectors treat a key's first reading as a baseline (core.cpp/drone.cpp). Tell the user; pressing F8
+  physically should clear it.
+
 ## Next session — start here
-1. OSD + F8 overlay: draw libfpv's fpv_osd_draw_data / fpv_overlay_render via a D3D9 hook (DXVK d3d9.dll; try
-   ScriptHook's ID3DHookService first, else hook IDirect3DDevice9::EndScene/Present). Forward mouse to the overlay.
+1. Check the overlay with real mouse use (GTA may clip/hide the cursor; GetCursorPos may stick) - needs the user.
 2. Exclude the player ped from probes (pass Niko's phInst as `exclude`; CPed's phInst offset TBD) — the drone can
    currently bump into frozen Niko (no effect is applied to him).
 3. Polish: SET_CAM_NEAR_CLIP; hide Niko in FPV view?; frame.altitude -1 when > a few m up; tune effect strengths.
