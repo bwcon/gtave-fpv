@@ -24,4 +24,18 @@ bool osd_frame(fpv_frame *out);
 // Host-injected radio channels (AETR, AUX1..4, -1..1), overriding devices for 0.5 s.
 void inject_channels(const float channels[8]);
 
+// Test knobs for the autotest (0 / negative = normal behaviour).
+struct Tuning {
+    float fov = 0;        // vertical degrees, overrides libfpv's FPV FOV
+    float near_clip = 0;  // overrides kNearClip
+    bool osd = true;
+    bool armed_flight = true;  // false: the autotest leaves the drone on the ground
+    bool hover = false;        // autotest hovers 2.5 m up without moving
+};
+Tuning &tuning();
+
+// The game's camera Euler angles (degrees) for a view basis in game coords.
+void basis_to_euler(const float forward[3], const float up[3], const float right[3], float *pitch, float *roll,
+                    float *heading);
+
 }  // namespace drone

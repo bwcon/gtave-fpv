@@ -66,6 +66,7 @@ bool load() {
     else
         cfg.log = &on_fpv_log;
     cfg.log_level = FPV_LOG_INFO;
+    cfg.flags |= FPV_INIT_NO_LENS_DISTORTION;  // no fisheye pass here: keep the FOV the player picks
     fpv_result r = fpv.fpv_global_init(&cfg);
     if (r != FPV_OK && r != FPV_ERROR_ALREADY_INITIALIZED) {
         fpvlog::write("fpv_global_init: %s (%s)", fpv.fpv_result_string(r), fpv.fpv_last_error());

@@ -8,6 +8,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 
 #include "drone.h"
@@ -18,21 +19,34 @@
 namespace autotest {
 namespace {
 
-enum class Stage { Idle, Waiting, Settling, Flying };
+enum class Stage { Idle, Waiting, Settling, Flying, CamTest };
 constexpr uint32_t kCarModel = 0x4b5c5320;  // joaat("admiral")
 constexpr uint32_t kPedModel = 0xda0e92d1;  // joaat("m_m_business_02")
 constexpr float kHoldHeight = 0.7f;         // low enough to hit a car or a ped's chest
 uint32_t g_target_car = 0;
 uint32_t g_target_ped = 0;
 bool g_ped_mode = false;  // autotest.txt containing "ped" targets a pedestrian
+bool g_cam_mode = false;  // "cam": camera rotation-order test instead of a flight
 
-bool read_ped_mode() {
-    char buf[16] = {};
+// autotest.txt: "car" or "ped" target, "cam" test, "still" (drone stays on the
+// ground), and knobs fov=<deg> near=<m> osd=<0|1>.
+void read_config() {
+    char buf[256] = {};
     if (FILE *f = std::fopen("fpv-data\\autotest.txt", "r")) {
         std::fread(buf, 1, sizeof buf - 1, f);
         std::fclose(f);
     }
-    return std::strstr(buf, "ped") != nullptr;
+    g_ped_mode = std::strstr(buf, "ped") != nullptr;
+    g_cam_mode = std::strstr(buf, "cam") != nullptr;
+    drone::Tuning &t = drone::tuning();
+    t = drone::Tuning{};
+    t.armed_flight = std::strstr(buf, "still") == nullptr;
+    t.hover = std::strstr(buf, "hover") != nullptr;
+    if (const char *p = std::strstr(buf, "fov=")) t.fov = float(std::atof(p + 4));
+    if (const char *p = std::strstr(buf, "near=")) t.near_clip = float(std::atof(p + 5));
+    if (const char *p = std::strstr(buf, "osd=")) t.osd = std::atoi(p + 4) != 0;
+    fpvlog::write("autotest: config '%s' -> fov %.1f near %.3f osd %d flight %d", buf, t.fov, t.near_clip, int(t.osd),
+                  int(t.armed_flight));
 }
 Stage g_stage = Stage::Idle;
 LARGE_INTEGER g_t0;
@@ -152,17 +166,135 @@ float g_hold_z = 0;
 // altitude hold keeps it kHoldHeight up while it cruises forward.
 void sticks(float t) {
     const fpv_frame &f = drone::last_frame();
-    if (g_hold_z == 0 && t > 0.5f) g_hold_z = f.position[2] + kHoldHeight;  // after the first fresh frame
+    if (g_hold_z == 0 && t > 0.5f) g_hold_z = f.position[2] + (drone::tuning().hover ? 2.5f : kHoldHeight);  // after the first fresh frame
     float ch[8] = {0, 0, -1, 0, -1, 1, -1, -1};
+    if (!drone::tuning().armed_flight) {  // parked: a still image for flicker checks
+        drone::inject_channels(ch);
+        return;
+    }
     if (t > 2.0f) ch[4] = 1;  // arm
     if (t > 3.0f) {
         float err = g_hold_z - f.position[2];
-        float tilt_comp = t > 5.0f ? 0.06f : 0.0f;  // more thrust while pitched forward
+        float tilt_comp = t > 5.0f && !drone::tuning().hover ? 0.06f : 0.0f;  // more thrust while pitched forward
         float thr = -0.71f + tilt_comp + 0.15f * err - 0.08f * f.velocity[2];  // -0.71 = hover
         ch[2] = thr < -0.9f ? -0.9f : thr > 0.3f ? 0.3f : thr;
     }
-    if (t > 5.0f) ch[1] = 0.5f;  // nose down: cruise forward
+    if (t > 5.0f && !drone::tuning().hover) ch[1] = 0.5f;  // nose down: cruise forward
     drone::inject_channels(ch);
+}
+
+// Camera rotation-order test. For each Euler input it projects the view axes
+// predicted by every rotation order through the game's real camera; the order
+// the game uses puts forward at the screen centre, up above it, right of it.
+struct Euler { float pitch, roll, heading; };
+const Euler kCamCases[] = {
+    {0, 0, 0}, {0, 0, 90}, {30, 0, 0}, {0, 30, 0}, {0, 150, 0}, {0, 180, 30}, {40, 70, 0},
+    {-50, 120, 60}, {80, 45, -30}, {20, -160, 135}, {60, 90, 45}, {-30, -100, 200},
+};
+constexpr int kOrders = 6;
+uint32_t g_test_cam = 0;
+int g_cam_case = 0, g_cam_wait = 0;
+bool g_cam_pass2 = false;  // second pass sets each case through drone::basis_to_euler
+float g_cam_pos[3];
+
+void mat_mul(const float a[9], const float b[9], float o[9]) {
+    for (int i = 0; i < 3; ++i)
+        for (int j = 0; j < 3; ++j) o[i * 3 + j] = a[i * 3] * b[j] + a[i * 3 + 1] * b[3 + j] + a[i * 3 + 2] * b[6 + j];
+}
+
+// Rx(pitch) Ry(roll) Rz(heading) multiplied in the order of `order`, then
+// applied to the camera's rest axes (forward +Y, up +Z, right +X).
+void predict(const Euler &e, int order, float f[3], float u[3], float r[3]) {
+    float d = 1 / 57.2957795f, a, c, sn;
+    float m[3][9];
+    a = e.pitch * d, c = std::cos(a), sn = std::sin(a);
+    float rx[9] = {1, 0, 0, 0, c, -sn, 0, sn, c};
+    a = e.roll * d, c = std::cos(a), sn = std::sin(a);
+    float ry[9] = {c, 0, sn, 0, 1, 0, -sn, 0, c};
+    a = e.heading * d, c = std::cos(a), sn = std::sin(a);
+    float rz[9] = {c, -sn, 0, sn, c, 0, 0, 0, 1};
+    std::memcpy(m[0], rx, sizeof rx), std::memcpy(m[1], ry, sizeof ry), std::memcpy(m[2], rz, sizeof rz);
+    static const int perms[kOrders][3] = {{2, 0, 1}, {2, 1, 0}, {0, 1, 2}, {0, 2, 1}, {1, 0, 2}, {1, 2, 0}};
+    float t[9], M[9];
+    mat_mul(m[perms[order][0]], m[perms[order][1]], t);
+    mat_mul(t, m[perms[order][2]], M);
+    for (int i = 0; i < 3; ++i) r[i] = M[i * 3], f[i] = M[i * 3 + 1], u[i] = M[i * 3 + 2];
+}
+
+void project(const float p[3], float *sx, float *sy) {
+    uint32_t vp = 0;
+    sh::call(N("GET_GAME_VIEWPORT_ID"), &vp);
+    *sx = *sy = -1;
+    sh::call(N("GET_VIEWPORT_POSITION_OF_COORD"), p[0], p[1], p[2], vp, sx, sy);
+}
+
+void cam_test_start() {
+    uint32_t ped = player_ped();
+    sh::call(N("GET_CHAR_COORDINATES"), ped, &g_cam_pos[0], &g_cam_pos[1], &g_cam_pos[2]);
+    g_cam_pos[2] += 20.0f;
+    sh::call(N("CREATE_CAM"), 14u, &g_test_cam);
+    sh::call(N("SET_CAM_POS"), g_test_cam, g_cam_pos[0], g_cam_pos[1], g_cam_pos[2]);
+    sh::call(N("SET_CAM_FOV"), g_test_cam, 60.0f);
+    sh::call(N("SET_CAM_ACTIVE"), g_test_cam, true);
+    sh::call(N("SET_CAM_PROPAGATE"), g_test_cam, true);
+    sh::call(N("ACTIVATE_SCRIPTED_CAMS"), true, true);
+    g_cam_case = 0;
+    g_cam_wait = 0;
+    g_cam_pass2 = false;
+    fpvlog::write("autotest: cam test, %d cases, %d orders (0 = Rz Rx Ry, the current one)", int(sizeof kCamCases / sizeof kCamCases[0]), kOrders);
+}
+
+void cam_test_stop() {
+    if (!g_test_cam) return;
+    sh::call(N("ACTIVATE_SCRIPTED_CAMS"), false, false);
+    sh::call(N("SET_CAM_ACTIVE"), g_test_cam, false);
+    sh::call(N("DESTROY_CAM"), g_test_cam);
+    g_test_cam = 0;
+}
+
+// True when finished.
+bool cam_test_tick() {
+    const int count = int(sizeof kCamCases / sizeof kCamCases[0]);
+    if (g_cam_case >= count) {
+        if (g_cam_pass2) return true;
+        g_cam_pass2 = true;
+        g_cam_case = 0;
+    }
+    const Euler &e = kCamCases[g_cam_case];
+    if (g_cam_wait++ == 0) {
+        if (g_cam_pass2) {  // the game's order is 1: does the conversion reproduce its basis?
+            float f[3], u[3], r[3], p, ro, h;
+            predict(e, 1, f, u, r);
+            drone::basis_to_euler(f, u, r, &p, &ro, &h);
+            sh::call(N("SET_CAM_ROT"), g_test_cam, p, ro, h);
+        } else {
+            sh::call(N("SET_CAM_ROT"), g_test_cam, e.pitch, e.roll, e.heading);
+        }
+        return false;
+    }
+    if (g_cam_wait < 6) return false;  // let a few frames render with it
+    float rp, rr, rh;
+    sh::call(N("GET_CAM_ROT"), g_test_cam, &rp, &rr, &rh);
+    fpvlog::write("camtest %s case %d set %.0f %.0f %.0f read %.1f %.1f %.1f", g_cam_pass2 ? "conv" : "raw", g_cam_case, e.pitch, e.roll, e.heading, rp, rr,
+                  rh);
+    for (int o = 0; o < kOrders; ++o) {
+        float f[3], u[3], r[3], s[3][2];
+        predict(e, o, f, u, r);
+        const float *axes[3] = {f, u, r};
+        for (int k = 0; k < 3; ++k) {
+            float p[3];
+            for (int i = 0; i < 3; ++i) p[i] = g_cam_pos[i] + f[i] * 10.0f + (k ? axes[k][i] * 2.0f : 0.0f);
+            project(p, &s[k][0], &s[k][1]);
+        }
+        // Back to the current conversion: does it reproduce this order's basis?
+        float bp, br, bh;
+        drone::basis_to_euler(f, u, r, &bp, &br, &bh);
+        fpvlog::write("camtest %s case %d order %d fwd %.3f %.3f up %.3f %.3f right %.3f %.3f | conv %.1f %.1f %.1f",
+                      g_cam_pass2 ? "conv" : "raw", g_cam_case, o, s[0][0], s[0][1], s[1][0], s[1][1], s[2][0], s[2][1], bp, br, bh);
+    }
+    ++g_cam_case;
+    g_cam_wait = 0;
+    return false;
 }
 
 }  // namespace
@@ -172,9 +304,9 @@ void tick() {
     if (g_stage == Stage::Idle) {
         if (++poll % 30 != 0 || !triggered()) return;
         g_stage = Stage::Waiting;
-        g_ped_mode = read_ped_mode();
+        read_config();
         QueryPerformanceCounter(&g_t0);
-        fpvlog::write("autotest: triggered (%s target), starting in 10 s", g_ped_mode ? "ped" : "car");
+        fpvlog::write("autotest: triggered (%s), starting in 10 s", g_cam_mode ? "cam test" : g_ped_mode ? "ped" : "car");
         return;
     }
     float t = seconds_since(g_t0);
@@ -188,6 +320,11 @@ void tick() {
             return;
         case Stage::Settling:
             if (t < 3.0f) return;
+            if (g_cam_mode) {
+                cam_test_start();
+                g_stage = Stage::CamTest;
+                return;
+            }
             probe_sweep();
             spawn_target();
             drone::toggle();
@@ -206,6 +343,15 @@ void tick() {
                 if (drone::active()) drone::toggle();
                 release_target();
                 g_stage = Stage::Idle;
+                drone::tuning() = drone::Tuning{};
+                fpvlog::write("autotest: done");
+            }
+            return;
+        case Stage::CamTest:
+            if (cam_test_tick()) {
+                cam_test_stop();
+                g_stage = Stage::Idle;
+                drone::tuning() = drone::Tuning{};
                 fpvlog::write("autotest: done");
             }
             return;
@@ -216,6 +362,7 @@ void tick() {
 
 void abort() {
     if (g_stage == Stage::Idle) return;
+    cam_test_stop();
     release_target();
     g_stage = Stage::Idle;
 }

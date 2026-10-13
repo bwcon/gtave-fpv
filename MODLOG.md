@@ -177,7 +177,39 @@ world collision, impacts that ragdoll/damage peds and vehicles.
   Ped handle -> entity via the pool (index = handle>>8, flags must match). SET_CAM_NEAR_CLIP(cam, 0.05).
   autotest.txt deleted after testing.
 
+- 2026-10-13 23:55: User reported flickering textures in drone mode + no drone sound.
+  - Flicker: blamed on SET_CAM_NEAR_CLIP 0.05 (depth precision -> z-fighting); now kNearClip 0.2 in drone.cpp.
+    Self-test screenshots at 0.2 look clean; an A/B at 0.05 was not finished. **User testing.** If it still
+    flickers, next suspects: world streaming centred on Niko, not the camera; the D3D state block in render.cpp.
+  - Audio was never implemented. src/audio.cpp: waveOut thread (44.1 kHz stereo s16, 4x512 frames) pulling
+    fpv_audio_read; started on launch, stopped (joined) in drone stop before the drone is deleted. Log shows
+    "audio: started", no waveOut error. Not heard yet. Scratchpad rec_test.sh can record game-only audio.
+
+- 2026-10-14 00:05-00:40: User: FPV-only flicker (less at near 0.2), mirrored view on flips, see-through ground when
+  landed; asked for an F8 option to turn off FOV/fisheye "post-effects". All fixed and self-tested:
+  - **Flips**: cam test (autotest.txt "cam", GET_VIEWPORT_POSITION_OF_COORD on axes predicted by all 6 Euler orders)
+    showed the game builds cameras as Rz(heading) Ry(roll) Rx(pitch), not Rz Rx Ry. drone::basis_to_euler now
+    uses roll = asin(-r.z), pitch = atan2(f.z, u.z), heading = atan2(r.y, r.x) (knife-edge fallback). Pass 2 of the
+    cam test VERIFIED all 12 cases (inverted, knife edge, past vertical) land forward/up/right correctly.
+  - **Flicker**: measured with scratchpad tools/flicker.py (A-B-A pixel toggles in `um win record` clips). FOV and near
+    clip made no difference; the OSD pass did: D3DSBT_ALL state block + SetRenderTarget/SetDepthStencilSurface(null)
+    swap, even without drawing anything, made the next frame show stale regions and exposure jumps. render.cpp now
+    draws on the bound back buffer (it always is: ~150 calls/s, back buffer bound) and saves/restores only the states it
+    touches (SavedState). Parked-with-OSD toggles 1-6% (peaks 86%) -> 0.000; hover 0.000.
+  - **See-through ground**: near plane (0.2, ±30 cm tall at this FOV) cut the road under a 7 cm-high lens. Now
+    near_clip_for() probes 9 frustum rays (centre/edges/corners, aspect up to 2.4) and sets near = 0.8 x closest depth,
+    clamped 0.02..0.2. Parked: near 0.079, road rendered to the bottom edge.
+  - **FOV/fisheye**: the mod never drew libfpv's lens pass, but libfpv widened the FOV for it (100 -> ~112 vertical).
+    New libfpv flag FPV_INIT_NO_LENS_DISTORTION (libfpv working tree, branch win32-i686, NOT committed; 20 tests pass):
+    no widening, k1=k2=0, F8 > Camera shows "Fisheye lens: not drawn by this game". The FOV slider there still works.
+    Possible later: real fisheye pass in D3D9 (StretchRect + pixel shader).
+  - Audio recording check: flying clip RMS 0.043 vs parked 0.014 -> motor sound reaches the game's audio output.
+  - autotest.txt knobs: car|ped|cam, still, hover, fov=, near=, osd=. Careful: a hot reload re-triggers the
+    existing autotest.txt, so recordings lagged one run until scratchpad at.sh stopped deploying between runs.
+  - **User wants the game closed after testing** (GTAIV + PlayGTAIV + Launcher by PID).
+
 ## Next session — start here
+0. Ask the user about the 2026-10-14 fixes (flicker, flips, ground, sound, FOV). Ask before committing the libfpv flag.
 1. Check the overlay with real mouse use (GTA may clip/hide the cursor; GetCursorPos may stick) - needs the user.
 2. Polish: frame.altitude -1 when > a few m up (libfpv probe range?); tune effect strengths with the user.
 3. Prop body (visible drone model for chase/LOS cams), audio (fpv_audio_read -> XAudio2/waveOut).

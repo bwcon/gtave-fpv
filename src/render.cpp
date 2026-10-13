@@ -144,6 +144,80 @@ void feed_mouse(IDirect3DDevice9 *dev, float w, float h) {
     }
 }
 
+// Everything setup_state() and draw() change, so it can be put back.
+const D3DRENDERSTATETYPE kRenderStates[] = {
+    D3DRS_FILLMODE, D3DRS_SHADEMODE, D3DRS_ZENABLE, D3DRS_ZWRITEENABLE, D3DRS_ALPHATESTENABLE, D3DRS_CULLMODE,
+    D3DRS_ALPHABLENDENABLE, D3DRS_BLENDOP, D3DRS_SRCBLEND, D3DRS_DESTBLEND, D3DRS_SEPARATEALPHABLENDENABLE,
+    D3DRS_SRCBLENDALPHA, D3DRS_DESTBLENDALPHA, D3DRS_SCISSORTESTENABLE, D3DRS_FOGENABLE, D3DRS_RANGEFOGENABLE,
+    D3DRS_SPECULARENABLE, D3DRS_STENCILENABLE, D3DRS_CLIPPING, D3DRS_LIGHTING, D3DRS_SRGBWRITEENABLE,
+    D3DRS_COLORWRITEENABLE, D3DRS_BLENDOPALPHA,
+};
+const D3DTEXTURESTAGESTATETYPE kStage0States[] = {
+    D3DTSS_COLOROP, D3DTSS_COLORARG1, D3DTSS_COLORARG2, D3DTSS_ALPHAOP, D3DTSS_ALPHAARG1, D3DTSS_ALPHAARG2,
+    D3DTSS_TEXTURETRANSFORMFLAGS,
+};
+const D3DSAMPLERSTATETYPE kSamplerStates[] = {
+    D3DSAMP_MINFILTER, D3DSAMP_MAGFILTER, D3DSAMP_MIPFILTER, D3DSAMP_ADDRESSU, D3DSAMP_ADDRESSV, D3DSAMP_SRGBTEXTURE,
+};
+constexpr size_t kNumRs = sizeof kRenderStates / sizeof kRenderStates[0];
+constexpr size_t kNumTss = sizeof kStage0States / sizeof kStage0States[0];
+constexpr size_t kNumSs = sizeof kSamplerStates / sizeof kSamplerStates[0];
+
+struct SavedState {
+    DWORD rs[kNumRs], tss0[kNumTss], tss1_color, tss1_alpha, ss[kNumSs];
+    D3DVIEWPORT9 viewport;
+    RECT scissor;
+    IDirect3DBaseTexture9 *texture = nullptr;
+    IDirect3DVertexShader9 *vs = nullptr;
+    IDirect3DPixelShader9 *ps = nullptr;
+    IDirect3DVertexDeclaration9 *decl = nullptr;
+    DWORD fvf;
+    IDirect3DVertexBuffer9 *stream = nullptr;
+    UINT stream_offset, stream_stride;
+    IDirect3DIndexBuffer9 *indices = nullptr;
+
+    void save(IDirect3DDevice9 *dev) {
+        for (size_t i = 0; i < kNumRs; ++i) dev->GetRenderState(kRenderStates[i], &rs[i]);
+        for (size_t i = 0; i < kNumTss; ++i) dev->GetTextureStageState(0, kStage0States[i], &tss0[i]);
+        dev->GetTextureStageState(1, D3DTSS_COLOROP, &tss1_color);
+        dev->GetTextureStageState(1, D3DTSS_ALPHAOP, &tss1_alpha);
+        for (size_t i = 0; i < kNumSs; ++i) dev->GetSamplerState(0, kSamplerStates[i], &ss[i]);
+        dev->GetViewport(&viewport);
+        dev->GetScissorRect(&scissor);
+        dev->GetTexture(0, &texture);
+        dev->GetVertexShader(&vs);
+        dev->GetPixelShader(&ps);
+        dev->GetVertexDeclaration(&decl);
+        dev->GetFVF(&fvf);
+        dev->GetStreamSource(0, &stream, &stream_offset, &stream_stride);
+        dev->GetIndices(&indices);
+    }
+
+    // Releases the references save() took.
+    void restore(IDirect3DDevice9 *dev) {
+        for (size_t i = 0; i < kNumRs; ++i) dev->SetRenderState(kRenderStates[i], rs[i]);
+        for (size_t i = 0; i < kNumTss; ++i) dev->SetTextureStageState(0, kStage0States[i], tss0[i]);
+        dev->SetTextureStageState(1, D3DTSS_COLOROP, tss1_color);
+        dev->SetTextureStageState(1, D3DTSS_ALPHAOP, tss1_alpha);
+        for (size_t i = 0; i < kNumSs; ++i) dev->SetSamplerState(0, kSamplerStates[i], ss[i]);
+        dev->SetViewport(&viewport);
+        dev->SetScissorRect(&scissor);
+        dev->SetTexture(0, texture);
+        dev->SetVertexShader(vs);
+        dev->SetPixelShader(ps);
+        if (decl)
+            dev->SetVertexDeclaration(decl);
+        else
+            dev->SetFVF(fvf);
+        dev->SetStreamSource(0, stream, stream_offset, stream_stride);
+        dev->SetIndices(indices);
+        for (IUnknown *u : {static_cast<IUnknown *>(texture), static_cast<IUnknown *>(vs), static_cast<IUnknown *>(ps),
+                            static_cast<IUnknown *>(decl), static_cast<IUnknown *>(stream),
+                            static_cast<IUnknown *>(indices)})
+            if (u) u->Release();
+    }
+};
+
 }  // namespace
 
 void frame(IDirect3DDevice9 *dev) {
@@ -173,28 +247,22 @@ void frame(IDirect3DDevice9 *dev) {
         return;
     }
 
-    IDirect3DStateBlock9 *state = nullptr;
-    if (FAILED(dev->CreateStateBlock(D3DSBT_ALL, &state))) {
-        backbuffer->Release();
-        return;
-    }
-    IDirect3DSurface9 *old_rt = nullptr, *old_ds = nullptr;
-    dev->GetRenderTarget(0, &old_rt);
-    dev->GetDepthStencilSurface(&old_ds);
-    dev->SetRenderTarget(0, backbuffer);
-    dev->SetDepthStencilSurface(nullptr);
+    // Draw straight onto the bound back buffer and restore exactly the state
+    // we touch. A D3DSBT_ALL state block plus a render target / depth swap
+    // here made the game's next frame flicker (stale regions, exposure jumps).
+    IDirect3DSurface9 *rt = nullptr;
+    dev->GetRenderTarget(0, &rt);
+    bool on_backbuffer = rt == backbuffer;
+    if (rt) rt->Release();
+    backbuffer->Release();
+    if (!on_backbuffer) return;
 
+    SavedState saved;
+    saved.save(dev);
     setup_state(dev, w, h);
     if (osd) draw(dev, *osd);
     if (overlay) draw(dev, *overlay);
-
-    dev->SetRenderTarget(0, old_rt);
-    dev->SetDepthStencilSurface(old_ds);
-    if (old_rt) old_rt->Release();
-    if (old_ds) old_ds->Release();
-    state->Apply();
-    state->Release();
-    backbuffer->Release();
+    saved.restore(dev);
 }
 
 void release() {

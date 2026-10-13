@@ -4,6 +4,7 @@
 
 #include <cmath>
 #include <mutex>
+#include "audio.h"
 #include "effects.h"
 #include "fpvapi.h"
 #include "log.h"
@@ -14,6 +15,9 @@ namespace drone {
 namespace {
 
 constexpr float kRadToDeg = 57.2957795f;
+constexpr float kNearClip = 0.2f;      // with clear space in front of the lens
+constexpr float kMinNearClip = 0.02f;  // when the lens almost touches something
+constexpr float kWidestAspect = 2.4f;  // frustum probes cover up to 21:9
 
 using fpvapi::fpv;
 
@@ -27,6 +31,7 @@ float g_spawn_pos[3];
 float g_spawn_rot[4];
 LARGE_INTEGER g_last_tick;
 fpv_frame g_frame{};
+float g_near_clip = 0, g_fov = 0;  // last values sent to the game, for the trace
 std::mutex g_osd_mutex;  // guards g_osd_frame / g_osd_visible for the render thread
 fpv_frame g_osd_frame{};
 bool g_osd_visible = false;
@@ -79,14 +84,42 @@ bool key_pressed(int vk) {
 
 // Game cameras take Euler degrees: x pitch, y roll, z heading (0 = north,
 // counter-clockwise positive).
-void apply_camera(const fpv_camera &c) {
-    const float *f = c.forward, *u = c.up, *r = c.right;
-    float heading = std::atan2(-f[0], f[1]) * kRadToDeg;
-    float pitch = std::asin(f[2] < -1 ? -1 : f[2] > 1 ? 1 : f[2]) * kRadToDeg;
-    float roll = std::atan2(-r[2], u[2]) * kRadToDeg;
+// The FPV camera rides a few cm above the road: a fixed near plane cuts the
+// ground away under the lens and the game shows whatever was left in that
+// part of the frame. Probe the view frustum (centre, edge midpoints and
+// corners) and pull the near plane in front of the closest geometry.
+float near_clip_for(const fpv_camera &c, float fov_y) {
+    const float ty = std::tan(fov_y * 0.5f / kRadToDeg), tx = ty * kWidestAspect;
+    float nearest = kNearClip / 0.8f;  // depth along the view axis
+    for (int sy = -1; sy <= 1; ++sy)
+        for (int sx = -1; sx <= 1; ++sx) {
+            float d[3], len = 0;
+            for (int i = 0; i < 3; ++i) {
+                d[i] = c.forward[i] + c.right[i] * tx * float(sx) + c.up[i] * ty * float(sy);
+                len += d[i] * d[i];
+            }
+            len = std::sqrt(len);
+            for (float &v : d) v /= len;
+            fpv_raycast_hit hit{};
+            // depth = distance * cos(angle to the axis) = distance / len
+            if (world::raycast(nullptr, c.position, d, nearest * len, &hit) && hit.distance / len < nearest)
+                nearest = hit.distance / len;
+        }
+    float n = nearest * 0.8f;
+    return n < kMinNearClip ? kMinNearClip : n > kNearClip ? kNearClip : n;
+}
+
+void apply_camera(const fpv_camera &c, bool fpv_view) {
+    float pitch, roll, heading;
+    basis_to_euler(c.forward, c.up, c.right, &pitch, &roll, &heading);
     sh::call(N("SET_CAM_POS"), g_cam, c.position[0], c.position[1], c.position[2]);
     sh::call(N("SET_CAM_ROT"), g_cam, pitch, roll, heading);
-    sh::call(N("SET_CAM_FOV"), g_cam, c.fov_y_degrees);
+    float fov = fpv_view && tuning().fov > 0 ? tuning().fov : c.fov_y_degrees;
+    sh::call(N("SET_CAM_FOV"), g_cam, fov);
+    float near_clip = tuning().near_clip > 0 ? tuning().near_clip : fpv_view ? near_clip_for(c, fov) : kNearClip;
+    sh::call(N("SET_CAM_NEAR_CLIP"), g_cam, near_clip);
+    g_near_clip = near_clip;
+    g_fov = fov;
 }
 
 void start() {
@@ -132,12 +165,12 @@ void start() {
 
     sh::call(N("SET_PLAYER_CONTROL"), g_player, false);
     sh::call(N("CREATE_CAM"), 14u, &g_cam);
-    sh::call(N("SET_CAM_NEAR_CLIP"), g_cam, 0.05f);  // the FPV camera sits a few cm from walls
     sh::call(N("SET_CAM_ACTIVE"), g_cam, true);
     sh::call(N("SET_CAM_PROPAGATE"), g_cam, true);
     sh::call(N("ACTIVATE_SCRIPTED_CAMS"), true, true);
     QueryPerformanceCounter(&g_last_tick);
     g_view = View::Fpv;
+    audio::start();
 
     fpv_input_status st{};
     st.struct_size = sizeof st;
@@ -152,6 +185,7 @@ void start() {
 }
 
 void stop() {
+    audio::stop();  // before the drone: the audio thread reads libfpv's synth
     if (g_cam) {
         sh::call(N("ACTIVATE_SCRIPTED_CAMS"), false, false);
         sh::call(N("SET_CAM_ACTIVE"), g_cam, false);
@@ -173,6 +207,26 @@ void stop() {
 }
 
 }  // namespace
+
+Tuning &tuning() {
+    static Tuning t;
+    return t;
+}
+
+// The game builds a camera as Rz(heading) Ry(roll) Rx(pitch) (measured with
+// the autotest's cam test), so the bottom row of that matrix is
+// (-sin roll, cos roll sin pitch, cos roll cos pitch) across right, forward, up.
+void basis_to_euler(const float f[3], const float u[3], const float r[3], float *pitch, float *roll, float *heading) {
+    float rz = r[2] < -1 ? -1 : r[2] > 1 ? 1 : r[2];
+    *roll = std::asin(-rz) * kRadToDeg;
+    if (std::fabs(rz) < 0.9999f) {
+        *pitch = std::atan2(f[2], u[2]) * kRadToDeg;
+        *heading = std::atan2(r[1], r[0]) * kRadToDeg;
+    } else {  // knife edge: pitch and heading share an axis, put it all in heading
+        *pitch = 0;
+        *heading = std::atan2(-f[0], f[1]) * kRadToDeg;
+    }
+}
 
 void inject_channels(const float channels[8]) {
     if (fpvapi::loaded()) fpv.fpv_input_set_channels(channels, 8);
@@ -245,9 +299,10 @@ void tick() {
     {
         std::lock_guard<std::mutex> lock(g_osd_mutex);
         g_osd_frame = frame;
-        g_osd_visible = g_view == View::Fpv;
+        g_osd_visible = g_view == View::Fpv && tuning().osd;
     }
-    apply_camera(g_view == View::Fpv ? frame.camera : g_view == View::Chase ? frame.chase_camera : frame.los_camera);
+    apply_camera(g_view == View::Fpv ? frame.camera : g_view == View::Chase ? frame.chase_camera : frame.los_camera,
+                 g_view == View::Fpv);
 
     for (uint32_t i = 0; i < frame.impact_count && i < FPV_MAX_IMPACTS; ++i) {
         const fpv_impact &im = frame.impacts[i];
@@ -263,9 +318,9 @@ void tick() {
     log_timer += dt;
     if (log_timer > 1.0f) {
         log_timer = 0;
-        fpvlog::write("drone pos %.2f %.2f %.2f flags 0x%x alt %.2f thr %.2f arm '%s'", frame.position[0],
-                      frame.position[1], frame.position[2], frame.flags, frame.altitude, frame.channels[2],
-                      frame.arming_disable_text);
+        fpvlog::write("drone pos %.2f %.2f %.2f flags 0x%x alt %.2f thr %.2f fov %.1f near %.3f arm '%s'",
+                      frame.position[0], frame.position[1], frame.position[2], frame.flags, frame.altitude,
+                      frame.channels[2], g_fov, g_near_clip, frame.arming_disable_text);
     }
 }
 

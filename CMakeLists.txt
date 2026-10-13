@@ -22,6 +22,7 @@ set_target_properties(gtaiv_fpv_loader PROPERTIES PREFIX "" OUTPUT_NAME "GTAIV.F
 # GTAIV.FPV.core.dll: the mod itself.
 add_library(gtaiv_fpv_core SHARED
   src/core.cpp
+  src/audio.cpp
   src/autotest.cpp
   src/drone.cpp
   src/effects.cpp
@@ -33,6 +34,7 @@ add_library(gtaiv_fpv_core SHARED
   src/log.cpp
 )
 set_target_properties(gtaiv_fpv_core PROPERTIES PREFIX "" OUTPUT_NAME "GTAIV.FPV.core")
+target_link_libraries(gtaiv_fpv_core PRIVATE winmm)
 # The core appends to the log the loader started.
 target_compile_definitions(gtaiv_fpv_core PRIVATE FPVLOG_APPEND)
 
