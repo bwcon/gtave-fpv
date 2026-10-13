@@ -128,11 +128,36 @@ world collision, impacts that ragdoll/damage peds and vehicles.
   Check `um win drive --proc explorer idle` first.
 - Throttle note: 5" PropEater hovers near thr -0.7 (15% stick); thr 0.1 shot it to 700 m in 18 s.
 
+- 2026-10-13 23:00-23:22: **Impacts on vehicles and peds VERIFIED (self-tested).**
+  - Entity pools (1.2.0.59, VA @0x700000, `mov ecx,[pool]` sites signature-checked in world.cpp): peds *(0x1bb6f1c)
+    (site 0xeb37b9 in GET_PLAYER_CHAR's helper 0xeb37b0), vehicles *(0x15e22a4) (0xea653c), objects *(0x1932c60)
+    (0xd04664). Pool {objects, flags, count, entry_size}; handle = index<<8 | flags[index] (game fn 0x7b7020,
+    handle->ptr 0x799d20, both thiscall on the pool). PlayerInfo+0x598 = CPed*, CPed+0xb30 = vehicle.
+    phInst+0xC = CEntity* (IV-SDK layout holds). Verified: Niko -> ped handle 2 (= GET_PLAYER_CHAR).
+  - fpv object_id = kind<<28 | handle (1 ped, 2 vehicle, 3 object, 4 building/other).
+  - effects.cpp: ped >= 4 m/s -> SWITCH_PED_TO_RAGDOLL(ped,1000,3000,0,1,1,0) + DAMAGE_CHAR(speed*2) + APPLY_FORCE_TO_PED;
+    car >= 5 m/s -> SET_CAR_HEALTH(-speed*3) + APPLY_FORCE_TO_CAR; objects -> APPLY_FORCE_TO_OBJECT. Cooldown 0.5 s per
+    entity, started only when an effect applied (a 2 m/s graze first used to swallow the real hit). Player skipped.
+  - Results: car 1000 -> 979 at 7.1 m/s; ped ragdoll=1, 200 -> 185 (178 after the fall) at 7.8 m/s.
+  - Native hashes in GTAIV.exe registration are transformed (not joaat, not xor/add const); use ScriptHook's
+    Game::GetNativeAddressFromHash at runtime (recon.cpp logs handlers each start).
+- **Hot reload**: GTAIV.FPV.asi is now a loader (src/loader.cpp) owning the ScriptHook thread, the log ("w") and
+  libfpv's log callback (export gtaiv_fpv_libfpv_log, so libfpv never calls into an unloaded core). It polls
+  GTAIV.FPV.core.dll's timestamp every 30 ticks, calls the core's gtaiv_fpv_core_unload (stops drone + autotest),
+  FreeLibrary, copies to GTAIV.FPV.core.live.dll and loads that. ./deploy.sh while the game runs = reload in ~1 s
+  (the asi and libfpv.dll stay locked; deploy says "kept the running one").
+- Launcher gotcha: killing GTAIV.exe leaves PlayGTAIV.exe + Launcher.exe thinking the game runs; the next launch only
+  shows Rockstar's "A game is currently running" dialog. Kill those two by PID (tasklist) before relaunching.
+  With hot reload, relaunches are rarely needed.
+- Test script: scratchpad run_test.sh <car|ped> <shot-prefix> (hot reload if running, else cold start; reads only new
+  log lines; 4 screenshots). Autotest now faces north on the Broker road (585,1410) with the target 16 m ahead,
+  holds 0.7 m, pitch 0.5.
+
 ## Next session — start here
-1. Impacts on peds/vehicles: map Intersection.inst (phInst*) -> CEntity (find the offset, e.g. via IV-SDK phInstGta
-   m_pEntity), report object_id to libfpv, and on fpv_impact apply ragdoll/damage via natives (SWITCH_PED_TO_RAGDOLL,
-   DAMAGE_CHAR / APPLY_FORCE_TO_CAR or similar). Test with autotest variant flying at a spawned ped/car.
-2. Exclude the player ped from probes (pass its phInst as `exclude`) once the entity mapping exists.
-3. Polish: SET_CAM_NEAR_CLIP; Niko visible in FPV view; frame.altitude -1 when > a few m up.
-4. OSD/F8 overlay via D3D9 Present hook (DXVK is the d3d9.dll; ScriptHook ID3DHookService may help), prop body, audio.
-5. Delete GTAIV/fpv-data/autotest.txt when done testing.
+1. OSD + F8 overlay: draw libfpv's fpv_osd_draw_data / fpv_overlay_render via a D3D9 hook (DXVK d3d9.dll; try
+   ScriptHook's ID3DHookService first, else hook IDirect3DDevice9::EndScene/Present). Forward mouse to the overlay.
+2. Exclude the player ped from probes (pass Niko's phInst as `exclude`; CPed's phInst offset TBD) — the drone can
+   currently bump into frozen Niko (no effect is applied to him).
+3. Polish: SET_CAM_NEAR_CLIP; hide Niko in FPV view?; frame.altitude -1 when > a few m up; tune effect strengths.
+4. Prop body (visible drone model for chase/LOS cams), audio (fpv_audio_read -> XAudio2/waveOut).
+5. Delete GTAIV/fpv-data/autotest.txt before handing the game back to the user.

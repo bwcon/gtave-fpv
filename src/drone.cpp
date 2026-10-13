@@ -7,6 +7,7 @@
 
 #include <libfpv.h>
 
+#include "effects.h"
 #include "log.h"
 #include "scripthook.h"
 #include "world.h"
@@ -96,7 +97,12 @@ bool load_libfpv() {
     cfg.data_dir = data_dir.c_str();
     // GTA IV: metres, X east, Y north, Z up.
     cfg.coords = {FPV_AXIS_POS_X, FPV_AXIS_POS_Z, FPV_AXIS_POS_Y, 1.0f};
-    cfg.log = &on_fpv_log;
+    // Prefer the loader's callback: libfpv keeps it across core reloads.
+    if (auto loader_log = reinterpret_cast<fpv_log_fn>(reinterpret_cast<void *>(
+            GetProcAddress(GetModuleHandleA("GTAIV.FPV.asi"), "gtaiv_fpv_libfpv_log"))))
+        cfg.log = loader_log;
+    else
+        cfg.log = &on_fpv_log;
     cfg.log_level = FPV_LOG_INFO;
     fpv_result r = fpv.fpv_global_init(&cfg);
     if (r != FPV_OK && r != FPV_ERROR_ALREADY_INITIALIZED) {
@@ -296,10 +302,11 @@ void tick() {
     for (uint32_t i = 0; i < frame.impact_count && i < FPV_MAX_IMPACTS; ++i) {
         const fpv_impact &im = frame.impacts[i];
         if (im.speed < 1.0f) continue;  // resting contact
-        fpvlog::write("impact at %.2f %.2f %.2f n %.2f %.2f %.2f speed %.1f impulse %.2f motor %d", im.position[0],
-                      im.position[1], im.position[2], im.normal[0], im.normal[1], im.normal[2], im.speed, im.impulse,
-                      int(im.motor_index));
+        fpvlog::write("impact at %.2f %.2f %.2f n %.2f %.2f %.2f speed %.1f impulse %.2f motor %d object %08x",
+                      im.position[0], im.position[1], im.position[2], im.normal[0], im.normal[1], im.normal[2], im.speed,
+                      im.impulse, int(im.motor_index), im.object_id);
     }
+    effects::on_frame(frame);
 
     // Sparse trace for debugging the axes and the camera mapping.
     static float log_timer = 0;

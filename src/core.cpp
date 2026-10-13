@@ -1,11 +1,11 @@
-// GTA IV FPV drone mode, powered by libfpv.
+// GTA IV FPV drone mode, powered by libfpv. This is GTAIV.FPV.core.dll; the
+// GTAIV.FPV.asi loader calls it every script tick and hot-reloads it.
 #include <windows.h>
 
 #include "autotest.h"
 #include "drone.h"
 #include "log.h"
 #include "recon.h"
-#include "scripthook.h"
 
 namespace {
 
@@ -31,11 +31,11 @@ void tick() {
 
 }  // namespace
 
-BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID) {
-    if (reason == DLL_PROCESS_ATTACH) {
-        DisableThreadLibraryCalls(module);
-        fpvlog::write("GTAIV.FPV attached");
-        sh::register_thread(&tick);
-    }
-    return TRUE;
+extern "C" __declspec(dllexport) void gtaiv_fpv_core_tick() { tick(); }
+
+// Called before the loader unloads this core: leave nothing pointing into it.
+extern "C" __declspec(dllexport) void gtaiv_fpv_core_unload() {
+    if (drone::active()) drone::toggle();
+    autotest::abort();
+    fpvlog::write("core unloaded");
 }

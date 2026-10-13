@@ -10,7 +10,11 @@ namespace fpvlog {
 
 void write(const char *fmt, ...) {
     static std::mutex mutex;
+#ifdef FPVLOG_APPEND  // the core appends to the log the loader started
+    static FILE *file = std::fopen("GTAIV.FPV.log", "a");
+#else
     static FILE *file = std::fopen("GTAIV.FPV.log", "w");
+#endif
     if (!file) return;
 
     std::lock_guard<std::mutex> lock(mutex);

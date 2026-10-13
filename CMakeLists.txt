@@ -11,18 +11,33 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(LIBFPV_DIR "$ENV{HOME}/Projects/libfpv" CACHE PATH "libfpv source checkout")
 set(LIBFPV_BUILD "${LIBFPV_DIR}/build/win32" CACHE PATH "libfpv i686 build dir")
 
-add_library(gtaiv_fpv SHARED
-  src/main.cpp
+# GTAIV.FPV.asi: loader that owns the ScriptHook thread and hot-reloads the core.
+add_library(gtaiv_fpv_loader SHARED
+  src/loader.cpp
+  src/scripthook.cpp
+  src/log.cpp
+)
+set_target_properties(gtaiv_fpv_loader PROPERTIES PREFIX "" OUTPUT_NAME "GTAIV.FPV" SUFFIX ".asi")
+
+# GTAIV.FPV.core.dll: the mod itself.
+add_library(gtaiv_fpv_core SHARED
+  src/core.cpp
   src/autotest.cpp
   src/drone.cpp
+  src/effects.cpp
   src/recon.cpp
   src/world.cpp
   src/scripthook.cpp
   src/log.cpp
 )
-set_target_properties(gtaiv_fpv PROPERTIES PREFIX "" OUTPUT_NAME "GTAIV.FPV" SUFFIX ".asi")
-target_include_directories(gtaiv_fpv PRIVATE src "${LIBFPV_DIR}/include")
-# libfpv.dll is loaded at runtime; the header is only used for declarations.
-target_compile_definitions(gtaiv_fpv PRIVATE LIBFPV_STATIC)
-target_compile_options(gtaiv_fpv PRIVATE -Wall -Wextra -Wno-unused-parameter)
-target_link_options(gtaiv_fpv PRIVATE -static)
+set_target_properties(gtaiv_fpv_core PROPERTIES PREFIX "" OUTPUT_NAME "GTAIV.FPV.core")
+# The core appends to the log the loader started.
+target_compile_definitions(gtaiv_fpv_core PRIVATE FPVLOG_APPEND)
+
+foreach(target gtaiv_fpv_loader gtaiv_fpv_core)
+  target_include_directories(${target} PRIVATE src "${LIBFPV_DIR}/include")
+  # libfpv.dll is loaded at runtime; the header is only used for declarations.
+  target_compile_definitions(${target} PRIVATE LIBFPV_STATIC)
+  target_compile_options(${target} PRIVATE -Wall -Wextra -Wno-unused-parameter)
+  target_link_options(${target} PRIVATE -static)
+endforeach()

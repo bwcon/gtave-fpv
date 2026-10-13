@@ -45,7 +45,12 @@ void *__attribute__((thiscall)) deleting_dtor(void *self, unsigned) {
 
 }  // namespace
 
-void invoke(NativeContext *ctx, uint32_t hash) { g_invoke(ctx, hash); }
+void invoke(NativeContext *ctx, uint32_t hash) {
+    if (!g_invoke)  // a hot-reloaded core resolves it on first use
+        g_invoke = export_fn<InvokeFn>(GetModuleHandleA("ScriptHook.dll"),
+                                       "?SpeedyInvoke@NativeInvoke@@CAXPAVNativeContext@@I@Z");
+    g_invoke(ctx, hash);
+}
 
 bool register_thread(TickFn tick) {
     HMODULE hook = GetModuleHandleA("ScriptHook.dll");

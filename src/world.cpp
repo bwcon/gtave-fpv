@@ -18,6 +18,28 @@ constexpr uint32_t kProbeRva = 0xa38880 - 0x700000;        // phLevel::TestProbe
 constexpr uint32_t kVerticalProbeRva = 0xd54510 - 0x700000; // reads the level pointer at +0x60
 constexpr uint32_t kLevelPtrRva = 0x15b9c78 - 0x700000;
 
+// Entity pools, each loaded by a `mov ecx, [pool]` we check before trusting it:
+// peds in GET_PLAYER_CHAR's helper, vehicles in GET_CAR_CHAR_IS_USING's,
+// objects in GET_OBJECT_COORDINATES'.
+struct PoolRef {
+    Kind kind;
+    uint32_t mov_rva;   // address of the `8b 0d <abs32>` instruction
+    uint32_t pool_rva;  // the pool pointer it loads
+};
+const PoolRef kPools[] = {
+    {Kind::Ped, 0xeb37b9 - 0x700000, 0x1bb6f1c - 0x700000},
+    {Kind::Vehicle, 0xea653c - 0x700000, 0x15e22a4 - 0x700000},
+    {Kind::Object, 0xd04664 - 0x700000, 0x1932c60 - 0x700000},
+};
+
+// rage pool header; handle = index << 8 | flags[index] (0x7b7020 in the game).
+struct Pool {
+    uint8_t *objects;
+    uint8_t *flags;
+    uint32_t count;
+    uint32_t entry_size;
+};
+
 const uint8_t kProbePrologue[] = {0x55, 0x8b, 0xec, 0x83, 0xe4, 0xf0, 0xb8, 0xcc, 0x49, 0x00, 0x00};
 
 struct alignas(16) Vec4 {
@@ -53,6 +75,7 @@ using ProbeFn = int(__attribute__((thiscall)) *)(void *level, const Segment *seg
 ProbeFn g_probe = nullptr;
 void **g_level = nullptr;
 bool g_checked = false;
+Pool **g_pools[3] = {};
 
 bool resolve() {
     if (g_checked) return g_probe != nullptr;
@@ -68,6 +91,15 @@ bool resolve() {
         level_abs != uint32_t(reinterpret_cast<uintptr_t>(base + kLevelPtrRva))) {
         fpvlog::write("world: probe signature mismatch (not GTA IV 1.2.0.59?), using ground-only collision");
         return false;
+    }
+    for (int i = 0; i < 3; ++i) {
+        uint8_t *ins = base + kPools[i].mov_rva;
+        uint32_t abs = 0;
+        std::memcpy(&abs, ins + 2, 4);
+        if (ins[0] == 0x8b && ins[1] == 0x0d && abs == uint32_t(reinterpret_cast<uintptr_t>(base + kPools[i].pool_rva)))
+            g_pools[i] = reinterpret_cast<Pool **>(base + kPools[i].pool_rva);
+        else
+            fpvlog::write("world: pool %d signature mismatch, impacts on it won't affect the entity", i);
     }
     g_probe = reinterpret_cast<ProbeFn>(probe);
     g_level = reinterpret_cast<void **>(base + kLevelPtrRva);
@@ -89,6 +121,35 @@ int ground_only(const float origin[3], const float dir[3], float max_distance, f
     hit->material = 0;
     hit->object_id = 0;
     return 1;
+}
+
+// phInst::m_pEntity (+0xC, IV-SDK), or null when the pointer looks wrong.
+void *entity_of(void *inst) {
+    if (!inst) return nullptr;
+    void *entity = *reinterpret_cast<void **>(static_cast<uint8_t *>(inst) + 0xc);
+    MEMORY_BASIC_INFORMATION mbi;
+    if (!entity || !VirtualQuery(entity, &mbi, sizeof mbi) || mbi.State != MEM_COMMIT ||
+        (mbi.Protect & (PAGE_NOACCESS | PAGE_GUARD)))
+        return nullptr;
+    return entity;
+}
+
+// Kind and script handle of an entity, packed as an fpv object_id.
+uint32_t classify(void *entity) {
+    if (!entity) return 0;
+    auto p = static_cast<uint8_t *>(entity);
+    for (int i = 0; i < 3; ++i) {
+        Pool *pool = g_pools[i] ? *g_pools[i] : nullptr;
+        if (!pool || !pool->entry_size || p < pool->objects || p >= pool->objects + pool->count * pool->entry_size)
+            continue;
+        uint32_t off = uint32_t(p - pool->objects);
+        if (off % pool->entry_size) continue;
+        uint32_t index = off / pool->entry_size;
+        uint8_t flag = pool->flags[index];
+        if (flag & 0x80) return 0;  // free slot
+        return uint32_t(kPools[i].kind) << 28 | (index << 8 | flag);
+    }
+    return uint32_t(Kind::Other) << 28;
 }
 
 bool usable_normal(const Vec4 &n, const float dir[3]) {
@@ -116,12 +177,16 @@ int raycast(void *, const float origin[3], const float dir[3], float max_distanc
     if (distance < 0 || distance > max_distance) return 0;
 
     const Vec4 &n = usable_normal(is.normal_a, dir) ? is.normal_a : is.normal_b;
+    void *entity = entity_of(is.inst);
+    uint32_t object_id = classify(entity);
+    static void *last_entity = nullptr;
     static int traced = 0;
-    if (traced < 10) {
+    if (traced < 10 || (entity != last_entity && traced < 60)) {
         ++traced;
-        fpvlog::write("world: hit d %.2f inst %p pos %.2f %.2f %.2f nA %.2f %.2f %.2f nB %.2f %.2f %.2f t %.3f mat %u",
-                      distance, is.inst, is.position.x, is.position.y, is.position.z, is.normal_a.x, is.normal_a.y,
-                      is.normal_a.z, is.normal_b.x, is.normal_b.y, is.normal_b.z, is.t, is.material);
+        last_entity = entity;
+        fpvlog::write("world: hit d %.2f entity %p kind %u handle %u pos %.2f %.2f %.2f n %.2f %.2f %.2f", distance,
+                      entity, uint32_t(kind_of(object_id)), handle_of(object_id), is.position.x, is.position.y,
+                      is.position.z, n.x, n.y, n.z);
     }
     if (!usable_normal(n, dir)) {
         // No trustworthy normal: treat it as facing straight back at the ray.
@@ -135,7 +200,7 @@ int raycast(void *, const float origin[3], const float dir[3], float max_distanc
     }
     hit->distance = distance;
     hit->material = 0;
-    hit->object_id = 0;
+    hit->object_id = object_id;
     return 1;
 }
 
