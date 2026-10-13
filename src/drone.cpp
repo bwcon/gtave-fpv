@@ -196,10 +196,6 @@ void start() {
     fpvlog::write("drone launched at %.2f %.2f %.2f heading %.1f, cam %u, input %d '%s'%s", g_spawn_pos[0],
                   g_spawn_pos[1], g_spawn_pos[2], heading, g_cam, int(st.source), st.device_name,
                   st.needs_setup ? " (needs setup)" : "");
-    print(st.source == FPV_INPUT_SOURCE_RADIO
-              ? "FPV: radio connected. C camera, R reset, N move Niko here, F7 back to Niko"
-              : "FPV: keyboard. Enter arm, W/S throttle, A/D yaw, arrows pitch/roll, C camera, R reset, N move Niko, F7 back",
-          8000);
 }
 
 void stop() {

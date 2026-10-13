@@ -216,7 +216,8 @@ world collision, impacts that ragdoll/damage peds and vehicles.
     is no longer passed. drone.cpp lens_fov() redoes libfpv's FOV widening for the real back-buffer aspect
     (render::aspect()) instead of the 4:3 aspect_hint: FOV 119.2 at 16:9. Single application per frame: the
     screenshot shows a moderate barrel warp (lamp poles bowed), not a doubled one.
-    Known: PRINT_STRING help text is drawn by the game before our pass, so it gets warped/pushed to the bottom edge.
+    The launch help text (PRINT_STRING) was warped off screen by the lens; user chose to remove it (no libfpv
+    message API, no own text drawing).
   - **HUD hidden VERIFIED**: HIDE_HUD_AND_RADAR_THIS_FRAME every drone tick (all views); no state to restore.
   - **Move Niko here VERIFIED** (button + key): libfpv got fpv_overlay_set_action(id, label) /
     fpv_overlay_poll_action() (libfpv 41c30f1, test added, 20 tests pass win32 + linux). Button "Move Niko here (N)"
@@ -229,7 +230,6 @@ world collision, impacts that ragdoll/damage peds and vehicles.
 
 ## Next session — start here
 0. Ask the user how the fisheye, HUD hiding and Move Niko here feel with the real radio (fisheye default strength?).
-   Maybe draw the launch help text ourselves (the game's is warped by the lens) or show it in the OSD.
 1. Check the overlay with real mouse use (GTA may clip/hide the cursor; GetCursorPos may stick) - needs the user.
 2. Polish: frame.altitude -1 when > a few m up (libfpv probe range?); tune effect strengths with the user.
 3. Prop body (visible drone model for chase/LOS cams), audio (fpv_audio_read -> XAudio2/waveOut).
