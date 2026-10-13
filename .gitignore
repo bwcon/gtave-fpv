@@ -1,0 +1,8 @@
+build/
+*.dll
+*.asi
+*.exe
+*.rpf
+*.wdr
+*.wft
+backups/
