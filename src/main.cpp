@@ -3,6 +3,7 @@
 
 #include "drone.h"
 #include "log.h"
+#include "recon.h"
 #include "scripthook.h"
 
 namespace {
@@ -20,6 +21,7 @@ void tick() {
     if (first) {
         first = false;
         fpvlog::write("first script tick");
+        recon::run_once();
     }
     if (key_pressed(VK_F7)) drone::toggle();
     drone::tick();

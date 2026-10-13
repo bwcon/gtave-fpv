@@ -87,11 +87,22 @@ world collision, impacts that ragdoll/damage peds and vehicles.
   - Log line every 2 s: drone pos, flags, altitude, throttle, arming-disable text.
   - deploy.sh now also copies ~/Projects/libfpv/build/win32/libfpv.dll to GTAIV/.
 
+- 2026-10-13: **Slice VERIFIED in game** by the user: flies, camera follows, roll sign correct. Radio "Arduino RaspberryPi
+  Pico" detected as radio (log says "needs setup" but the user flies it fine). frame.altitude stays -1 (ground ray not
+  answered for its query? check later).
+- World raycast research: no raycast native in IV. IV-SDK .NET (~/gtaiv-ref/IV-SDK-DotNet, reference only) has
+  CWorld::ProcessLineOfSight(CVector* from, CVector* to, uint32* unk=0, tLineOfSightResults* res, flags=142, 1, 0,
+  seeThrough=2, 4), cdecl, returns bool; results 0x54 bytes: +0 phInstGta*, +0x10 end position, +0x20 / +0x30 vectors
+  (likely normal), flags 2 static, 4 buildings, 8 vehicles, 32/64 peds, 128 objects. Addresses only for 1.0.7.0 (0x596D80)
+  and 1.0.8.0 (0x52A400), not 1.2.0.59. Native hashes are not plain in GTAIV.exe (registration obfuscated), so
+  added src/recon.cpp: on first tick, logs handler addresses via ScriptHook's Game::GetNativeAddressFromHash for
+  GET_GROUND_Z_FOR_3D_COORD etc. and dumps the in-memory image to GTAIV/fpv-data/recon/gtaiv-image.bin (once).
+  Plan: disassemble those handlers offline (capstone via `uv run`, script in scratchpad) to find the line test.
+
 ## Next session — start here
-1. Ask the user to launch (PlayGTAIV.exe), load a save, press F7, try arming/flying (radio or keyboard), C, R, F7 back.
-   Then read GTAIV.FPV.log. Check: libfpv init OK, input source, camera follows, axes right (yaw/pitch/roll directions,
-   especially roll sign), drone sits on the ground instead of falling through.
-2. Fix whatever is off. Possible issues: scripted cam needs SET_CAM_NEAR_CLIP; FOV range; Niko visible in FPV view.
+1. If GTAIV/fpv-data/recon/gtaiv-image.bin exists: disassemble the logged native handlers (GET_GROUND_Z_FOR_3D_COORD
+   first) to find ProcessLineOfSight; else ask the user to launch + load a save once.
+2. Possible polish: SET_CAM_NEAR_CLIP; Niko visible in FPV view; frame.altitude -1.
 3. Then: real world raycast (walls/buildings) — find an engine probe (e.g. the physics line test used by
    IS_LINE_OF_SIGHT_CLEAR / ped shooting) and call it from the raycast callback.
 4. Later: prop body, OSD/overlay via D3D9 EndScene/Present hook (DXVK is the d3d9.dll; ScriptHook ID3DHookService may help),

@@ -14,6 +14,7 @@ set(LIBFPV_BUILD "${LIBFPV_DIR}/build/win32" CACHE PATH "libfpv i686 build dir")
 add_library(gtaiv_fpv SHARED
   src/main.cpp
   src/drone.cpp
+  src/recon.cpp
   src/scripthook.cpp
   src/log.cpp
 )
