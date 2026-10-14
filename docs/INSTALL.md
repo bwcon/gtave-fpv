@@ -65,6 +65,22 @@ Start the game, load a save and press **F7**. Niko launches the drone.
   are pitch and roll.
 - **Gamepad:** works too.
 
+## Tune it in Betaflight Configurator
+
+The drone runs real Betaflight, so you can set it up like a real quad, with
+PIDs, filters, rates and modes, in
+[Betaflight Configurator](https://app.betaflight.com) (the web app or the
+desktop app):
+
+1. In the game, launch the drone with F7.
+2. In Configurator, open Options and turn on **manual connection mode**.
+3. Pick **Manual Selection**, enter `ws://localhost:5761` as the port and
+   press Connect.
+
+F8 > Configurator shows the same address. While Configurator is connected,
+Betaflight won't arm, the same as a real quad, so disconnect it before you
+fly. Keep the motor protocol on PWM and ARM on AUX1.
+
 ## Updating
 
 Download the newest `gtaiv-fpv.zip` and extract it over the old files. Your
