@@ -56,13 +56,23 @@ the lens off.
 
 ## Installing
 
-Copy into the `GTAIV/` folder, next to `GTAIV.exe`:
+**Players: follow the [install guide on the latest release](https://github.com/hammerill/gtaiv-fpv/releases/latest).**
+It links everything you need and takes about five minutes.
+
+Every push to `main` builds a new release (`.github/workflows/release.yml`)
+with the latest libfpv, so `gtaiv-fpv.zip` is always current. The release
+text comes from `docs/INSTALL.md`. To rebuild with a newer libfpv without a
+mod change, run the Release workflow by hand from the Actions tab.
+
+The ZIP holds these files, which go into the `GTAIV/` folder next to
+`GTAIV.exe`:
 
 | File | What it is |
 |---|---|
 | `GTAIV.FPV.asi` | Loader that the ASI loader picks up |
 | `GTAIV.FPV.core.dll` | The mod itself (hot-reloaded by the loader) |
 | `libfpv.dll` | libfpv, i686 build |
+| `libfpv.LICENSE.txt` | libfpv's license (GPL-3.0-or-later) |
 
 Settings, radio mappings and Betaflight EEPROMs go in `GTAIV/fpv-data/`. The
 log is `GTAIV/GTAIV.FPV.log`.
@@ -132,3 +142,8 @@ runs the test.
   (through SimITL), OSD, overlay and sound.
 - Aru: the GTA IV C++ ScriptHook. ThirteenAG: FusionFix and the ASI loader.
 - Written with Claude (Anthropic).
+
+## License
+
+GPL-3.0-or-later, the same as libfpv (which embeds Betaflight). See
+[LICENSE](LICENSE) for the full text.
