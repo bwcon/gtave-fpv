@@ -39,11 +39,22 @@ void __attribute__((thiscall)) run_tick(void *) {
     if (g_tick) g_tick();
 }
 
+using OnKillFn = void(__attribute__((thiscall)) *)(void *self);
+OnKillFn g_base_on_kill;
+volatile LONG g_kills = 0;
+
+void __attribute__((thiscall)) on_kill(void *self) {
+    InterlockedIncrement(&g_kills);
+    if (g_base_on_kill) g_base_on_kill(self);
+}
+
 void *__attribute__((thiscall)) deleting_dtor(void *self, unsigned) {
     return self;  // g_thread is static: nothing to free
 }
 
 }  // namespace
+
+unsigned kill_count() { return unsigned(g_kills); }
 
 void invoke(NativeContext *ctx, uint32_t hash) {
     if (!g_invoke)  // a hot-reloaded core resolves it on first use
@@ -72,9 +83,11 @@ bool register_thread(TickFn tick) {
 
     ctor(&g_thread);
     // Derive from ScriptThread the way MSVC would: copy its vtable (and RTTI
-    // slot) and override RunTick and the destructor.
+    // slot) and override RunTick, OnKill and the destructor.
     std::memcpy(g_vtable, g_thread.vtable - 1, sizeof(g_vtable));
     g_vtable[1 + 0] = reinterpret_cast<void *>(&run_tick);
+    g_base_on_kill = reinterpret_cast<OnKillFn>(g_vtable[1 + 3]);
+    g_vtable[1 + 3] = reinterpret_cast<void *>(&on_kill);
     g_vtable[1 + 4] = reinterpret_cast<void *>(&deleting_dtor);
     g_thread.vtable = g_vtable + 1;
 

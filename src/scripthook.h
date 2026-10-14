@@ -16,6 +16,10 @@ using TickFn = void (*)();
 // why) when ScriptHook.dll is missing or does not export what we need.
 bool register_thread(TickFn tick);
 
+// How often ScriptHook killed our thread. It kills and restarts every script
+// thread when a save is loaded, and restarts its services (D3D hooks) too.
+unsigned kill_count();
+
 // rage::scrNativeCallContext plus ScriptHook's NativeContext argument stack.
 struct NativeContext {
     struct Vec3 { float x, y, z; };

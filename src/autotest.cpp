@@ -30,7 +30,8 @@ bool g_cam_mode = false;  // "cam": camera rotation-order test instead of a flig
 
 // autotest.txt: "car" or "ped" target, "cam" test, "still" (drone stays on the
 // ground), "hover", "niko" (end with Move Niko here), and knobs fov=<deg>
-// near=<m> osd=<0|1> secs=<flight seconds>.
+// near=<m> osd=<0|1> secs=<flight seconds>, "far" (climb 35 m, then cruise),
+// "incar" (Niko sits in the target car at launch).
 void read_config() {
     char buf[256] = {};
     if (FILE *f = std::fopen("fpv-data\\autotest.txt", "r")) {
@@ -44,6 +45,8 @@ void read_config() {
     t.armed_flight = std::strstr(buf, "still") == nullptr;
     t.hover = std::strstr(buf, "hover") != nullptr;
     t.move_niko = std::strstr(buf, "niko") != nullptr;
+    t.long_range = std::strstr(buf, "far") != nullptr;
+    t.in_car = std::strstr(buf, "incar") != nullptr;
     if (const char *p = std::strstr(buf, "secs=")) t.seconds = float(std::atof(p + 5));
     if (const char *p = std::strstr(buf, "fov=")) t.fov = float(std::atof(p + 4));
     if (const char *p = std::strstr(buf, "near=")) t.near_clip = float(std::atof(p + 5));
@@ -169,7 +172,10 @@ float g_hold_z = 0;
 // altitude hold keeps it kHoldHeight up while it cruises forward.
 void sticks(float t) {
     const fpv_frame &f = drone::last_frame();
-    if (g_hold_z == 0 && t > 0.5f) g_hold_z = f.position[2] + (drone::tuning().hover ? 2.5f : kHoldHeight);  // after the first fresh frame
+    const drone::Tuning &tu = drone::tuning();
+    if (g_hold_z == 0 && t > 0.5f)  // after the first fresh frame
+        g_hold_z = f.position[2] + (tu.long_range ? 35.0f : tu.hover ? 2.5f : kHoldHeight);
+    const float cruise_at = tu.long_range ? 12.0f : 5.0f;  // "far" climbs first
     float ch[8] = {0, 0, -1, 0, -1, 1, -1, -1};
     if (!drone::tuning().armed_flight) {  // parked: a still image for flicker checks
         drone::inject_channels(ch);
@@ -178,11 +184,11 @@ void sticks(float t) {
     if (t > 2.0f) ch[4] = 1;  // arm
     if (t > 3.0f) {
         float err = g_hold_z - f.position[2];
-        float tilt_comp = t > 5.0f && !drone::tuning().hover ? 0.06f : 0.0f;  // more thrust while pitched forward
+        float tilt_comp = t > cruise_at && !tu.hover ? 0.06f : 0.0f;  // more thrust while pitched forward
         float thr = -0.71f + tilt_comp + 0.15f * err - 0.08f * f.velocity[2];  // -0.71 = hover
         ch[2] = thr < -0.9f ? -0.9f : thr > 0.3f ? 0.3f : thr;
     }
-    if (t > 5.0f && !drone::tuning().hover) ch[1] = 0.5f;  // nose down: cruise forward
+    if (t > cruise_at && !tu.hover) ch[1] = 0.5f;  // nose down: cruise forward
     drone::inject_channels(ch);
 }
 
@@ -330,6 +336,7 @@ void tick() {
             }
             probe_sweep();
             spawn_target();
+            if (drone::tuning().in_car && g_target_car) sh::call(N("WARP_CHAR_INTO_CAR"), player_ped(), g_target_car);
             drone::toggle();
             if (!drone::active()) {
                 g_stage = Stage::Idle;
@@ -349,7 +356,15 @@ void tick() {
                     sh::call(N("GET_CHAR_COORDINATES"), player_ped(), &x, &y, &z);
                     fpvlog::write("autotest: Niko now at %.2f %.2f %.2f", x, y, z);
                 }
-                if (drone::active()) drone::toggle();
+                if (drone::active()) {
+                    const float *p = drone::last_frame().position;
+                    fpvlog::write("autotest: drone ended at %.2f %.2f %.2f", p[0], p[1], p[2]);
+                    drone::toggle();
+                    float x, y, z;
+                    sh::call(N("GET_CHAR_COORDINATES"), player_ped(), &x, &y, &z);
+                    fpvlog::write("autotest: Niko after F7 at %.2f %.2f %.2f in car %d", x, y, z,
+                                  int(sh::call<bool>(N("IS_CHAR_IN_ANY_CAR"), player_ped())));
+                }
                 release_target();
                 g_stage = Stage::Idle;
                 drone::tuning() = drone::Tuning{};

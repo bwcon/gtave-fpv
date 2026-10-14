@@ -30,6 +30,7 @@ FILETIME g_core_time{};
 SRWLOCK g_core_lock = SRWLOCK_INIT;
 // Before unloading, the core's D3D resources are released on the render thread.
 volatile LONG g_release_request = 0;
+volatile LONG g_render_calls = 0;  // OnRender count, to notice a dropped hook
 HANDLE g_released = CreateEventA(nullptr, TRUE, FALSE, nullptr);
 
 // ScriptHook's ID3DDeviceHook, built by hand (MSVC thiscall vtable):
@@ -44,6 +45,7 @@ void __attribute__((thiscall)) on_lost(void *, IDirect3DDevice9 *) {
 }
 
 void __attribute__((thiscall)) on_render(void *, IDirect3DDevice9 *dev) {
+    InterlockedIncrement(&g_render_calls);
     AcquireSRWLockShared(&g_core_lock);
     if (InterlockedExchange(&g_release_request, 0)) {
         if (g_core_release_d3d) g_core_release_d3d();
@@ -125,12 +127,39 @@ void load_core() {
     fpvlog::write("loader: core loaded (tick %p)", reinterpret_cast<void *>(g_core_tick));
 }
 
-void tick() {
+// Loading a save restarts ScriptHook's threads and services, and our D3D
+// hook stops being called (no OSD, lens or overlay). After a restart, add it
+// again once a second of ticks went by without a single OnRender; checking
+// first avoids registering it twice if it survived.
+void keep_d3d_hook() {
     static bool hooked = false;
+    static unsigned kills = 0;
+    static int wait = -1;
+    static LONG renders = 0;
     if (!hooked) {  // services are up once scripts tick
         hooked = true;
+        kills = sh::kill_count();
         install_d3d_hook();
+        return;
     }
+    if (sh::kill_count() != kills) {
+        kills = sh::kill_count();
+        wait = 60;
+        renders = g_render_calls;
+        fpvlog::write("loader: script threads restarted (save loaded?), watching the D3D hook");
+    }
+    if (wait < 0 || --wait > 0) return;
+    wait = -1;
+    if (g_render_calls != renders) {
+        fpvlog::write("loader: D3D hook still called after the restart");
+        return;
+    }
+    fpvlog::write("loader: D3D hook dropped by the restart, adding it again");
+    install_d3d_hook();
+}
+
+void tick() {
+    keep_d3d_hook();
     static int poll = 0;
     if (poll++ % 30 == 0 && core_changed()) load_core();
     if (g_core_tick) g_core_tick();

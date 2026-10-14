@@ -36,6 +36,8 @@ struct Tuning {
     bool hover = false;        // autotest hovers 2.5 m up without moving
     bool move_niko = false;    // autotest ends with "Move Niko here" instead of F7
     float seconds = 20;        // autotest flight length
+    bool long_range = false;   // autotest climbs 35 m before cruising, for long-range streaming tests
+    bool in_car = false;       // autotest puts Niko in the target car before the launch
 };
 Tuning &tuning();
 

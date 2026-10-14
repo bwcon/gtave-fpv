@@ -19,6 +19,9 @@ constexpr float kRadToDeg = 57.2957795f;
 constexpr float kNearClip = 0.2f;      // with clear space in front of the lens
 constexpr float kMinNearClip = 0.02f;  // when the lens almost touches something
 constexpr float kWidestAspect = 2.4f;  // frustum probes cover up to 21:9
+constexpr float kAnchorStart = 80.0f;  // drone this far from Niko: he starts following it
+constexpr float kAnchorStop = 40.0f;   // back this close to his spot: he goes home
+constexpr float kAnchorStep = 10.0f;   // re-place him once the drone is this far from him
 
 using fpvapi::fpv;
 
@@ -32,11 +35,26 @@ View g_view = View::Fpv;
 float g_spawn_pos[3];
 float g_spawn_rot[4];
 LARGE_INTEGER g_last_tick;
+double g_first_sim_time = -1;  // sim clock at the first frame of this flight
 fpv_frame g_frame{};
 float g_near_clip = 0, g_fov = 0;  // last values sent to the game, for the trace
 std::mutex g_osd_mutex;  // guards g_osd_frame / g_osd_visible for the render thread
 fpv_frame g_osd_frame{};
 bool g_osd_visible = false;
+
+// The game streams map detail, LODs, collision and traffic around the player,
+// so far from Niko the drone would fly through a low-detail, empty city with
+// no collision. Far away, Niko becomes a hidden, frozen streaming anchor that
+// rides along with the drone; he goes back to his spot (and car) afterwards.
+struct Anchor {
+    bool on = false;
+    uint32_t ped = 0;
+    uint32_t car = 0;  // the car he was in, 0 on foot
+    float home[3];
+    float heading;
+    float at[3];  // where he was last placed
+};
+Anchor g_anchor;
 
 uint32_t player_index() {
     return sh::call<uint32_t>(N("CONVERT_INT_TO_PLAYERINDEX"), sh::call<uint32_t>(N("GET_PLAYER_ID")));
@@ -139,6 +157,75 @@ void apply_camera(const fpv_camera &c, bool fpv_view) {
     g_fov = fov;
 }
 
+float dist(const float a[3], const float b[3]) {
+    float dx = a[0] - b[0], dy = a[1] - b[1], dz = a[2] - b[2];
+    return std::sqrt(dx * dx + dy * dy + dz * dz);
+}
+
+// Hidden, frozen, untouchable: nothing should notice a man floating with the drone.
+void set_anchor_state(uint32_t ped, bool anchored) {
+    sh::call(N("FREEZE_CHAR_POSITION"), ped, anchored);
+    sh::call(N("SET_CHAR_VISIBLE"), ped, !anchored);
+    sh::call(N("SET_CHAR_COLLISION"), ped, !anchored);
+    sh::call(N("SET_CHAR_INVINCIBLE"), ped, anchored);
+    sh::call(N("SET_EVERYONE_IGNORE_PLAYER"), g_player, anchored);
+    sh::call(N("SET_POLICE_IGNORE_PLAYER"), g_player, anchored);
+}
+
+void place_anchor(const float pos[3]) {
+    sh::call(N("SET_CHAR_COORDINATES"), g_anchor.ped, pos[0], pos[1], pos[2]);
+    for (int i = 0; i < 3; ++i) g_anchor.at[i] = pos[i];
+}
+
+void anchor_begin(const float pos[3]) {
+    uint32_t ped = 0;
+    sh::call(N("GET_PLAYER_CHAR"), g_player, &ped);
+    g_anchor = Anchor{};
+    g_anchor.ped = ped;
+    sh::call(N("GET_CHAR_COORDINATES"), ped, &g_anchor.home[0], &g_anchor.home[1], &g_anchor.home[2]);
+    sh::call(N("GET_CHAR_HEADING"), ped, &g_anchor.heading);
+    if (sh::call<bool>(N("IS_CHAR_IN_ANY_CAR"), ped)) {
+        sh::call(N("GET_CAR_CHAR_IS_USING"), ped, &g_anchor.car);
+        sh::call(N("WARP_CHAR_FROM_CAR_TO_COORD"), ped, pos[0], pos[1], pos[2]);
+    }
+    set_anchor_state(ped, true);
+    place_anchor(pos);
+    g_anchor.on = true;
+    fpvlog::write("anchor: Niko follows the drone from %.2f %.2f %.2f (car %u)", g_anchor.home[0], g_anchor.home[1],
+                  g_anchor.home[2], g_anchor.car);
+}
+
+// Puts Niko back where the flight left him: his car if it still exists,
+// otherwise his spot. go_home false leaves him where he is (Move Niko here).
+void anchor_end(bool go_home) {
+    if (!g_anchor.on) return;
+    g_anchor.on = false;
+    uint32_t ped = g_anchor.ped;
+    set_anchor_state(ped, false);
+    if (!go_home) return;
+    const float *h = g_anchor.home;
+    sh::call(N("LOAD_SCENE"), h[0], h[1], h[2]);
+    if (g_anchor.car && sh::call<bool>(N("DOES_VEHICLE_EXIST"), g_anchor.car)) {
+        sh::call(N("WARP_CHAR_INTO_CAR"), ped, g_anchor.car);
+        fpvlog::write("anchor: Niko back in car %u", g_anchor.car);
+    } else {
+        sh::call(N("SET_CHAR_COORDINATES"), ped, h[0], h[1], h[2]);
+        sh::call(N("SET_CHAR_HEADING"), ped, g_anchor.heading);
+        fpvlog::write("anchor: Niko back at %.2f %.2f %.2f%s", h[0], h[1], h[2],
+                      g_anchor.car ? " (his car is gone)" : "");
+    }
+}
+
+void update_anchor(const float drone_pos[3]) {
+    if (!g_anchor.on) {
+        if (dist(drone_pos, g_spawn_pos) > kAnchorStart) anchor_begin(drone_pos);
+    } else if (dist(drone_pos, g_anchor.home) < kAnchorStop) {
+        anchor_end(true);
+    } else if (dist(drone_pos, g_anchor.at) > kAnchorStep) {
+        place_anchor(drone_pos);
+    }
+}
+
 void start() {
     if (!fpvapi::load()) {
         print("FPV: libfpv failed to load, see GTAIV.FPV.log");
@@ -186,6 +273,7 @@ void start() {
     sh::call(N("SET_CAM_PROPAGATE"), g_cam, true);
     sh::call(N("ACTIVATE_SCRIPTED_CAMS"), true, true);
     QueryPerformanceCounter(&g_last_tick);
+    g_first_sim_time = -1;
     g_view = View::Fpv;
     audio::start();
     fpv.fpv_overlay_set_action(kMoveNikoAction, "Move Niko here (N)");
@@ -198,7 +286,7 @@ void start() {
                   st.needs_setup ? " (needs setup)" : "");
 }
 
-void stop() {
+void stop(bool go_home = true) {
     fpv.fpv_overlay_set_action(kMoveNikoAction, nullptr);
     audio::stop();  // before the drone: the audio thread reads libfpv's synth
     if (g_cam) {
@@ -207,6 +295,7 @@ void stop() {
         sh::call(N("DESTROY_CAM"), g_cam);
         g_cam = 0;
     }
+    anchor_end(go_home);
     sh::call(N("SET_PLAYER_CONTROL"), g_player, true);
     if (g_drone) {
         fpv.fpv_world_set_raycast_callback(nullptr, nullptr);
@@ -260,10 +349,10 @@ void move_niko_here() {
     fpv_raycast_hit hit{};
     bool ground = world::raycast(nullptr, origin, down, 300.0f, &hit) != 0;
     float z = ground ? origin[2] - hit.distance : pos[2];
-    stop();
+    stop(false);
     uint32_t ped = 0;
     sh::call(N("GET_PLAYER_CHAR"), g_player, &ped);
-    sh::call(N("LOAD_SCENE"), pos[0], pos[1], z);  // the world streamed around Niko, not the drone
+    sh::call(N("LOAD_SCENE"), pos[0], pos[1], z);  // the anchor may lag behind, and near clips stream little
     if (sh::call<bool>(N("IS_CHAR_IN_ANY_CAR"), ped))
         sh::call(N("WARP_CHAR_FROM_CAR_TO_COORD"), ped, pos[0], pos[1], z + 1.0f);
     else
@@ -327,6 +416,7 @@ void tick() {
         move_niko |= niko_key;
         if (camera_key) g_view = View((int(g_view) + 1) % int(View::Count));
         if (reset_key) {
+            anchor_end(true);  // Niko home first: the spawn's collision must be streamed in
             fpv.fpv_drone_reset(g_drone, g_spawn_pos, g_spawn_rot);
             fpv.fpv_drone_repair(g_drone);
         }
@@ -344,7 +434,15 @@ void tick() {
         if (reported++ < 5) fpvlog::write("fpv_drone_tick: %s", fpv.fpv_result_string(r));
         return;
     }
+    // Until libfpv's sim thread has stepped the new drone, the frame shows a
+    // stale snapshot (the world origin, or the last drone) and interpolates
+    // from it: the camera would jump there and the anchor would drag Niko and
+    // the streamed world away from the spawn. libfpv's clock is not reset per
+    // drone, so wait until it moved 50 ms past its first reading.
+    if (g_first_sim_time < 0) g_first_sim_time = frame.sim_time;
+    if (frame.sim_time < g_first_sim_time + 0.05) return;
     g_frame = frame;
+    update_anchor(frame.position);
     {
         std::lock_guard<std::mutex> lock(g_osd_mutex);
         g_osd_frame = frame;

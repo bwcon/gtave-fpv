@@ -228,8 +228,25 @@ world collision, impacts that ragdoll/damage peds and vehicles.
   - autotest knobs: `niko` (end with Move Niko here), `secs=<flight seconds>`. WinDrive keys take hex VKs (`key 0x77`).
   - README.md + docs/fpv-view.jpg added.
 
+- 2026-10-14 01:20-01:50: User asked: world (terrain, buildings, LODs, NPCs, cars) must stream around the drone, not Niko.
+  - FindPlayerCentreOfWorld is inlined all over 1.2.0.59 (FindPlayerInfo = 0x7757c0, player-in-focus index *(0x1336f14),
+    player infos 0x14a8808[32], GetPlayerInfo(id) = 0xc3fbe0), so no single hook. Instead **Niko is a streaming anchor**
+    (drone.cpp Anchor): drone > 80 m from spawn -> Niko frozen, invisible, no collision, invincible, everyone/police
+    ignore player, warped out of his car (handle kept), re-placed at the drone every 10 m. Back within 40 m of home,
+    F7, or R -> LOAD_SCENE home, back into his car if DOES_VEHICLE_EXIST, else his spot. Move Niko here keeps him there.
+  - User test 1: long flights worked, but the drone often spawned under the ground. Cause: the first frames after
+    fpv_drone_create are stale (origin, or the previous drone; libfpv's sim clock is global, never reset per drone),
+    so the anchor teleported Niko to 0,0,0 for 0.5 s and the spawn's collision unloaded. Fix: drone ticks ignore frames
+    until sim_time moved 50 ms past its first reading (also stops a camera jump). Possible libfpv fix later (ask first).
+  - User test 1: no OSD after Load Game. scripthook.log: loading kills and restarts all script threads (and, presumably,
+    its D3DHook service, dropping our device hook). scripthook.cpp now overrides ScriptThread OnKill (vtable [3]) to
+    count kills; loader re-adds the D3D hook if no OnRender arrives within 60 ticks after a restart.
+    **Both fixes NOT yet verified; the user is testing.** Unhandled: loading a save while flying.
+  - autotest knobs: `far` (climb 35 m, cruise from 12 s), `incar` (Niko in the target car at launch).
+
 ## Next session — start here
-0. Ask the user how the fisheye, HUD hiding and Move Niko here feel with the real radio (fisheye default strength?).
+0. Ask the user how the streaming anchor and the two fixes (spawn under ground, OSD after Load) went; commit.
+0b. Ask the user how the fisheye, HUD hiding and Move Niko here feel with the real radio (fisheye default strength?).
 1. Check the overlay with real mouse use (GTA may clip/hide the cursor; GetCursorPos may stick) - needs the user.
 2. Polish: frame.altitude -1 when > a few m up (libfpv probe range?); tune effect strengths with the user.
 3. Prop body (visible drone model for chase/LOS cams), audio (fpv_audio_read -> XAudio2/waveOut).
