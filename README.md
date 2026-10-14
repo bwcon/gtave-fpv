@@ -1,10 +1,10 @@
 # GTA IV FPV
 
-![FPV view over a Broker street, with the fisheye lens and the Betaflight OSD](docs/fpv-view.jpg)
+![GTA IV FPV GIF](gtaiv-fpv.gif)
 
 Fly an FPV drone through Liberty City with your own radio. Press F7 and Niko
-launches a quad from the street in front of him. You fly it from the goggles
-view. It is simulated by [libfpv](https://github.com/hammerill/libfpv), which
+launches a quad from the street in front of him. It is simulated by 
+[libfpv](https://github.com/hammerill/libfpv), which
 runs real Betaflight firmware, so rates, angle mode, arming and turtle mode
 behave as they do on a real quad.
 
@@ -66,9 +66,6 @@ Copy into the `GTAIV/` folder, next to `GTAIV.exe`:
 
 Settings, radio mappings and Betaflight EEPROMs go in `GTAIV/fpv-data/`. The
 log is `GTAIV/GTAIV.FPV.log`.
-
-Launch the game with `GTAIV/PlayGTAIV.exe`. If Steam updates the game, it may
-replace modded files.
 
 ## Building
 
