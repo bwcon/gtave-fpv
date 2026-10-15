@@ -32,7 +32,9 @@ bool g_cam_mode = false;  // "cam": camera rotation-order test instead of a flig
 // ground), "hover", "niko" (end with Move Niko here), and knobs fov=<deg>
 // near=<m> osd=<0|1> secs=<flight seconds>, "far" (climb 35 m, then cruise),
 // "incar" (Niko sits in the target car at launch), "osdoff" (OSD disable
-// switch on: no OSD, no game text).
+// switch on: no OSD, no game text), kamikaze builds: "boom" (bomb arm switch
+// on in flight, then into the target), "boomsw" (explode switch at 9 s
+// instead), "signal" / "cutscene" (ending, instead of the player's choice).
 void read_config() {
     char buf[256] = {};
     if (FILE *f = std::fopen("fpv-data\\autotest.txt", "r")) {
@@ -49,6 +51,9 @@ void read_config() {
     t.long_range = std::strstr(buf, "far") != nullptr;
     t.in_car = std::strstr(buf, "incar") != nullptr;
     t.osd_off = std::strstr(buf, "osdoff") != nullptr;
+    t.bomb = std::strstr(buf, "boom") != nullptr;
+    t.explode_switch = std::strstr(buf, "boomsw") != nullptr;
+    t.after_blast = std::strstr(buf, "cutscene") ? 1 : std::strstr(buf, "signal") ? 0 : -1;
     if (const char *p = std::strstr(buf, "secs=")) t.seconds = float(std::atof(p + 5));
     if (const char *p = std::strstr(buf, "fov=")) t.fov = float(std::atof(p + 4));
     if (const char *p = std::strstr(buf, "near=")) t.near_clip = float(std::atof(p + 5));
@@ -171,15 +176,16 @@ void probe_sweep() {
 float g_hold_z = 0;
 
 // AETR + AUX1 arm, AUX2 angle mode, AUX3 beeper, AUX4 turtle, AUX5 air mode,
-// AUX6 OSD disable. A crude
+// AUX6 OSD disable, AUX7 bomb arm, AUX8 explode. A crude
 // altitude hold keeps it kHoldHeight up while it cruises forward.
 void sticks(float t) {
     const fpv_frame &f = drone::last_frame();
     const drone::Tuning &tu = drone::tuning();
     if (g_hold_z == 0 && t > 0.5f)  // after the first fresh frame
         g_hold_z = f.position[2] + (tu.long_range ? 35.0f : tu.hover ? 2.5f : kHoldHeight);
-    const float cruise_at = tu.long_range ? 12.0f : 5.0f;  // "far" climbs first
-    float ch[FPV_CHANNEL_COUNT] = {0, 0, -1, 0, -1, 1, -1, -1, -1, tu.osd_off ? 1.0f : -1.0f};
+    // "far" climbs first; "boom" waits for the warhead to go live (6.5 s)
+    const float cruise_at = tu.long_range ? 12.0f : tu.bomb ? 7.0f : 5.0f;
+    float ch[FPV_CHANNEL_COUNT] = {0, 0, -1, 0, -1, 1, -1, -1, -1, tu.osd_off ? 1.0f : -1.0f, -1, -1};
     if (!drone::tuning().armed_flight) {  // parked: a still image for flicker checks
         drone::inject_channels(ch);
         return;
@@ -192,6 +198,8 @@ void sticks(float t) {
         ch[2] = thr < -0.9f ? -0.9f : thr > 0.3f ? 0.3f : thr;
     }
     if (t > cruise_at && !tu.hover) ch[1] = 0.5f;  // nose down: cruise forward
+    if (tu.bomb && t > 3.5f) ch[10] = 1;            // warhead live 3 s later (OSD ARMING 3, STEADY)
+    if (tu.explode_switch && t > 9.0f) ch[11] = 1;  // detonate in the air
     drone::inject_channels(ch);
 }
 

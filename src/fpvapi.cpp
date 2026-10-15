@@ -31,6 +31,8 @@ void on_fpv_log(void *, fpv_log_level level, const char *message) {
 
 bool loaded() { return g_loaded; }
 
+bool kamikaze() { return g_loaded && fpv.fpv_kamikaze_poll_detonation && fpv.fpv_kamikaze_get_state; }
+
 bool load() {
     if (g_loaded) return true;
     if (g_failed) return false;
@@ -52,6 +54,10 @@ bool load() {
     FPV_FUNCTIONS(FPV_FN)
 #undef FPV_FN
     if (!ok) return false;
+#define FPV_FN(name) \
+    fpv.name = reinterpret_cast<decltype(fpv.name)>(reinterpret_cast<void *>(GetProcAddress(lib, #name)));
+    FPV_KAMIKAZE_FUNCTIONS(FPV_FN)
+#undef FPV_FN
 
     std::string data_dir = game_dir() + "\\fpv-data";
     fpv_global_config cfg;
@@ -71,9 +77,10 @@ bool load() {
         fpvlog::write("fpv_global_init: %s (%s)", fpv.fpv_result_string(r), fpv.fpv_last_error());
         return false;
     }
-    fpvlog::write("libfpv %s initialised, data in %s", fpv.fpv_version_string(), data_dir.c_str());
     g_failed = false;
     g_loaded = true;
+    fpvlog::write("libfpv %s initialised (%s), data in %s", fpv.fpv_version_string(),
+                  kamikaze() ? "kamikaze build" : "no warhead", data_dir.c_str());
     return true;
 }
 

@@ -6,5 +6,6 @@ GAME="$(cd "$(dirname "$0")/../GTAIV" && pwd)"
 cp build/GTAIV.FPV.asi "$GAME/" 2>/dev/null || echo "loader in use, kept the running one"
 # The running game hot-reloads the core within a second of this copy.
 cp build/GTAIV.FPV.core.dll "$GAME/"
-cp "$HOME/Projects/libfpv/build/win32/libfpv.dll" "$GAME/" 2>/dev/null || echo "libfpv.dll in use, kept the running one"
+# LIBFPV_DLL=~/Projects/libfpv/build/win32-kamikaze/libfpv.dll ./deploy.sh for a kamikaze build.
+cp "${LIBFPV_DLL:-$HOME/Projects/libfpv/build/win32/libfpv.dll}" "$GAME/" 2>/dev/null || echo "libfpv.dll in use, kept the running one"
 echo "deployed to $GAME"

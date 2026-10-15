@@ -21,10 +21,11 @@ void move_niko_here();
 const fpv_frame &last_frame();
 
 // Copies the latest frame for the lens pass and the OSD; false when no drone
-// is flying or a third-person camera is on. Any thread.
-bool osd_frame(fpv_frame *out);
+// is flying or a third-person camera is on. no_signal: the warhead went off
+// and the goggles show static. Any thread.
+bool osd_frame(fpv_frame *out, bool *no_signal);
 
-// Host-injected radio channels (AETR, AUX1..6, -1..1), overriding devices for 0.5 s.
+// Host-injected radio channels (AETR, AUX1..8, -1..1), overriding devices for 0.5 s.
 void inject_channels(const float channels[FPV_CHANNEL_COUNT]);
 
 // Test knobs for the autotest (0 / negative = normal behaviour).
@@ -39,6 +40,9 @@ struct Tuning {
     bool long_range = false;   // autotest climbs 35 m before cruising, for long-range streaming tests
     bool in_car = false;       // autotest puts Niko in the target car before the launch
     bool osd_off = false;      // autotest flies with the OSD disable switch (AUX6) on
+    bool bomb = false;          // autotest turns the bomb arm switch (AUX7) on in flight
+    bool explode_switch = false;  // autotest fires the explode switch (AUX8) instead of hitting the target
+    int after_blast = -1;       // 0 signal lost, 1 cutscene; -1 = the player's F8 choice
 };
 Tuning &tuning();
 

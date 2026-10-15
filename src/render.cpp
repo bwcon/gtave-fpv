@@ -4,6 +4,7 @@
 
 #include <atomic>
 #include <cmath>
+#include <cstdio>
 #include <vector>
 
 #include "drone.h"
@@ -38,6 +39,11 @@ D3DFORMAT g_scene_format = D3DFMT_UNKNOWN;
 constexpr int kGridX = 64, kGridY = 36;  // cells; the warp is smooth, so this is exact to a pixel
 std::vector<Vertex> g_grid;
 std::vector<uint16_t> g_grid_indices;
+
+// Signal lost: analog static, regenerated every frame and stretched to the screen.
+constexpr UINT kStaticW = 320, kStaticH = 180;
+IDirect3DTexture9 *g_static = nullptr;
+uint32_t g_noise_seed = 0x2545f491u;
 
 IDirect3DTexture9 *texture(IDirect3DDevice9 *dev, uint64_t id) {
     if (id >= 3) return nullptr;
@@ -186,6 +192,97 @@ bool draw_lens(IDirect3DDevice9 *dev, IDirect3DSurface9 *backbuffer, const D3DSU
     return true;
 }
 
+uint32_t noise() {
+    g_noise_seed ^= g_noise_seed << 13, g_noise_seed ^= g_noise_seed >> 17, g_noise_seed ^= g_noise_seed << 5;
+    return g_noise_seed;
+}
+
+// Grey snow with brighter and darker rolling bands, like an analog receiver
+// that lost its transmitter.
+bool draw_static(IDirect3DDevice9 *dev, float w, float h) {
+    if (!g_static &&
+        FAILED(dev->CreateTexture(kStaticW, kStaticH, 1, 0, D3DFMT_A8R8G8B8, D3DPOOL_MANAGED, &g_static, nullptr)))
+        return false;
+    D3DLOCKED_RECT lr;
+    if (FAILED(g_static->LockRect(0, &lr, nullptr, 0))) return false;
+    static float band_phase = 0;
+    band_phase += 0.07f + float(noise() & 0xff) / 255.0f * 0.05f;
+    for (UINT y = 0; y < kStaticH; ++y) {
+        float band = 0.75f + 0.25f * std::sin(float(y) * 0.045f + band_phase);
+        if ((noise() & 63) == 0) band *= 1.35f;  // a torn line now and then
+        uint32_t *row = reinterpret_cast<uint32_t *>(static_cast<uint8_t *>(lr.pBits) + size_t(y) * lr.Pitch);
+        for (UINT x = 0; x < kStaticW; ++x) {
+            float v = float(noise() & 0xff) * band;
+            uint32_t g = v > 255 ? 255 : uint32_t(v);
+            row[x] = 0xff000000u | g << 16 | g << 8 | g;
+        }
+    }
+    g_static->UnlockRect(0);
+    Vertex quad[4] = {{-0.5f, -0.5f, 0, 1, 0xffffffffu, 0, 0},
+                      {w - 0.5f, -0.5f, 0, 1, 0xffffffffu, 1, 0},
+                      {-0.5f, h - 0.5f, 0, 1, 0xffffffffu, 0, 1},
+                      {w - 0.5f, h - 0.5f, 0, 1, 0xffffffffu, 1, 1}};
+    RECT full = {0, 0, LONG(w), LONG(h)};
+    dev->SetScissorRect(&full);
+    dev->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
+    dev->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
+    dev->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
+    dev->SetTexture(0, g_static);
+    dev->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, quad, sizeof(Vertex));
+    dev->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_LINEAR);
+    dev->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_LINEAR);
+    dev->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
+    return true;
+}
+
+// Self-test screenshots: creating fpv-data/shot.txt saves the next finished
+// frame (with our passes) to fpv-data/shots/<time>.bmp and deletes the file.
+// Window capture from outside does not always work (a WSL in session 0).
+void save_screenshot(IDirect3DDevice9 *dev, IDirect3DSurface9 *backbuffer, const D3DSURFACE_DESC &desc) {
+    static int frames = 0;
+    if (++frames % 10 != 0 || GetFileAttributesA("fpv-data\\shot.txt") == INVALID_FILE_ATTRIBUTES) return;
+    DeleteFileA("fpv-data\\shot.txt");
+    IDirect3DSurface9 *rt = nullptr, *mem = nullptr;
+    bool ok = SUCCEEDED(dev->CreateRenderTarget(desc.Width, desc.Height, D3DFMT_X8R8G8B8, D3DMULTISAMPLE_NONE, 0, FALSE,
+                                                &rt, nullptr)) &&
+              SUCCEEDED(dev->StretchRect(backbuffer, nullptr, rt, nullptr, D3DTEXF_NONE)) &&
+              SUCCEEDED(dev->CreateOffscreenPlainSurface(desc.Width, desc.Height, D3DFMT_X8R8G8B8, D3DPOOL_SYSTEMMEM,
+                                                        &mem, nullptr)) &&
+              SUCCEEDED(dev->GetRenderTargetData(rt, mem));
+    D3DLOCKED_RECT lr;
+    if (ok && SUCCEEDED(mem->LockRect(&lr, nullptr, D3DLOCK_READONLY))) {
+        CreateDirectoryA("fpv-data\\shots", nullptr);
+        SYSTEMTIME t;
+        GetLocalTime(&t);
+        char path[MAX_PATH];
+        snprintf(path, sizeof path, "fpv-data\\shots\\%02d%02d%02d-%03d.bmp", t.wHour, t.wMinute, t.wSecond,
+                 t.wMilliseconds);
+        if (FILE *f = std::fopen(path, "wb")) {
+            BITMAPFILEHEADER fh{};
+            BITMAPINFOHEADER ih{};
+            ih.biSize = sizeof ih;
+            ih.biWidth = LONG(desc.Width);
+            ih.biHeight = -LONG(desc.Height);  // top-down
+            ih.biPlanes = 1;
+            ih.biBitCount = 32;
+            fh.bfType = 0x4d42;
+            fh.bfOffBits = sizeof fh + sizeof ih;
+            fh.bfSize = fh.bfOffBits + desc.Width * desc.Height * 4;
+            std::fwrite(&fh, sizeof fh, 1, f);
+            std::fwrite(&ih, sizeof ih, 1, f);
+            for (UINT y = 0; y < desc.Height; ++y)
+                std::fwrite(static_cast<uint8_t *>(lr.pBits) + size_t(y) * lr.Pitch, 4, desc.Width, f);
+            std::fclose(f);
+            fpvlog::write("render: screenshot %s", path);
+        }
+        mem->UnlockRect();
+    } else {
+        fpvlog::write("render: screenshot failed (format %d)", int(desc.Format));
+    }
+    if (mem) mem->Release();
+    if (rt) rt->Release();
+}
+
 // Mouse for the overlay, in back buffer pixels.
 void feed_mouse(IDirect3DDevice9 *dev, float w, float h) {
     D3DDEVICE_CREATION_PARAMETERS cp;
@@ -302,11 +399,14 @@ void frame(IDirect3DDevice9 *dev) {
 
     static fpv_frame snapshot;
     const fpv_draw_data *osd = nullptr;
-    bool fpv_view = drone::osd_frame(&snapshot);
-    bool lens = fpv_view && (snapshot.camera.distortion_k1 != 0 || snapshot.camera.distortion_k2 != 0);
-    if (fpv_view && drone::tuning().osd) osd = fpv.fpv_osd_draw_data(&snapshot, w, h, FPV_OSD_STYLE_ANALOG);
+    bool no_signal = false;
+    bool fpv_view = drone::osd_frame(&snapshot, &no_signal);
+    bool lens = fpv_view && !no_signal && (snapshot.camera.distortion_k1 != 0 || snapshot.camera.distortion_k2 != 0);
+    if (fpv_view && (drone::tuning().osd || no_signal))
+        osd = fpv.fpv_osd_draw_data(&snapshot, w, h, FPV_OSD_STYLE_ANALOG);
     const fpv_draw_data *overlay = fpv.fpv_overlay_render(dt);
-    if (!lens && (!osd || !osd->list_count) && (!overlay || !overlay->list_count)) {
+    if (!lens && !no_signal && (!osd || !osd->list_count) && (!overlay || !overlay->list_count)) {
+        save_screenshot(dev, backbuffer, desc);
         backbuffer->Release();
         return;
     }
@@ -330,9 +430,14 @@ void frame(IDirect3DDevice9 *dev) {
         static int reported = 0;
         if (reported++ < 3) fpvlog::write("render: fisheye pass failed (format %d)", int(desc.Format));
     }
+    if (no_signal && !draw_static(dev, w, h)) {
+        static int reported = 0;
+        if (reported++ < 3) fpvlog::write("render: static pass failed");
+    }
     if (osd) draw(dev, *osd);
     if (overlay) draw(dev, *overlay);
     saved.restore(dev);
+    save_screenshot(dev, backbuffer, desc);
     backbuffer->Release();
 }
 
@@ -342,6 +447,8 @@ void release() {
     if (g_scene) g_scene->Release();
     g_scene = nullptr;
     g_scene_w = g_scene_h = 0;
+    if (g_static) g_static->Release();
+    g_static = nullptr;
     for (Texture &t : g_textures) {
         if (t.tex) t.tex->Release();
         t = Texture{};

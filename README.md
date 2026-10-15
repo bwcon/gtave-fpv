@@ -32,6 +32,29 @@ turtle mode behave as they do on a real quad.
   things drawn in the world stay.
 - **Move Niko here**: ends the flight with Niko standing where the drone is,
   facing the way it faced.
+- **Kamikaze** (only with a kamikaze build of libfpv, see below): the drone
+  carries a warhead. A detonation sets off a grenade-sized GTA explosion
+  where it happened. Then either the goggles show static with "SIGNAL LOST"
+  for 4 seconds, or an outside camera shows the blast for 5 seconds
+  ("Cutscene"). After that you control Niko again. Pick the ending with the
+  "After the blast" button in F8 > Fly.
+
+## Kamikaze
+
+Build libfpv with `-DLIBFPV_KAMIKAZE=ON` and put that `libfpv.dll` in
+`GTAIV/`. The mod finds the warhead functions at runtime, so the same
+`GTAIV.FPV.core.dll` works with both builds. With a normal libfpv the kamikaze
+parts are switched off. The log says which build is loaded: "kamikaze build"
+or "no warhead". The release ZIP ships the normal build.
+
+The rules are libfpv's. Arm the motors with the bomb switch (AUX7) off. Take
+off and flip the switch, and after the arming delay (OSD `ARMING 3`, then
+`STEADY`) the warhead is live. Once it is live, any touch sets it off, and so
+does the explode switch (AUX8). Without a radio, K toggles the bomb switch
+and X held is the explode switch. On a gamepad, X/Square toggles the bomb
+switch and the right shoulder button is the explode switch. Payload, arming
+delay and fuse sensitivity are in F8 > Fly. The ending choice is saved in
+`GTAIV/fpv-data/gtaiv-fpv.ini`.
 
 ## Controls
 
@@ -89,7 +112,7 @@ The build needs CMake 3.24 or newer and the i686 MinGW-w64 toolchain
 (`i686-w64-mingw32-g++-posix`). It cross-compiles from Linux or WSL.
 
 ```sh
-# libfpv, 32-bit (from the libfpv checkout)
+# libfpv, 32-bit (from the libfpv checkout); add -DLIBFPV_KAMIKAZE=ON for the warhead
 cmake -S . -B build/win32 -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-i686.cmake
 cmake --build build/win32 -j
 
@@ -97,6 +120,8 @@ cmake --build build/win32 -j
 cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=cmake/mingw-w64-i686.cmake
 cmake --build build
 ./deploy.sh   # copies the asi, the core and libfpv.dll into ../GTAIV
+# or with a kamikaze libfpv built in build/win32-kamikaze:
+LIBFPV_DLL=~/Projects/libfpv/build/win32-kamikaze/libfpv.dll ./deploy.sh
 ```
 
 `LIBFPV_DIR` (default `~/Projects/libfpv`) and `LIBFPV_BUILD` point the
@@ -139,8 +164,15 @@ what was verified in game.
 road, launches the drone and flies a fixed stick sequence, logging
 everything. Knobs: `car`/`ped` (crash target), `hover`, `still`, `cam`
 (camera-axis test), `niko` (end with Move Niko here), `secs=`, `fov=`,
-`near=`, `osd=`, `osdoff` (fly with the OSD disable switch on). **Delete the file afterwards.** Otherwise every game start
+`near=`, `osd=`, `osdoff` (fly with the OSD disable switch on), and with a
+kamikaze libfpv `boom` (arm the warhead in flight and hit the target),
+`boomsw` (air burst with the explode switch), and `signal`/`cutscene` (force
+an ending). **Delete the file afterwards.** Otherwise every game start
 runs the test.
+
+Creating `GTAIV/fpv-data/shot.txt` saves the next finished frame, with the
+mod's own drawing, to `GTAIV/fpv-data/shots/<time>.bmp`. This works when
+window capture can't see the game.
 
 ## Credits
 

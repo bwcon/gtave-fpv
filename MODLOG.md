@@ -255,7 +255,40 @@ world collision, impacts that ragdoll/damage peds and vehicles.
     "upgrading Betaflight configuration for new mode switches" on the existing EEPROM, flags 0x241/0x260 (0x200 set),
     hover stable, no native errors. Help/subtitle hiding and the GPS home arrow NOT yet seen on screen by the user.
 
+- 2026-10-15 15:00-15:26: **Kamikaze support** (libfpv 31a7bc8, "surprise build flag", -DLIBFPV_KAMIKAZE=ON). User's choices:
+  ending toggle as an F8 > Fly button (saved in fpv-data/gtaiv-fpv.ini, `after_blast=signal_lost|cutscene`), grenade
+  explosion, release ZIP keeps the normal libfpv.
+  - Mod compiles with LIBFPV_KAMIKAZE always (FPV_CHANNEL_COUNT 12, bigger fpv_frame); fpv_kamikaze_poll_detonation /
+    fpv_kamikaze_get_state are optional GetProcAddress (fpvapi::kamikaze()). A normal dll copies min(struct_size) and
+    clamps channels, so it just works. Local kamikaze libfpv: ~/Projects/libfpv/build/win32-kamikaze (tests on, examples
+    off); deploy with `LIBFPV_DLL=.../build/win32-kamikaze/libfpv.dll ./deploy.sh`. **GTAIV/libfpv.dll is now the
+    kamikaze build.**
+  - src/kamikaze.cpp: ADD_EXPLOSION(x,y,z, 0 grenade, 5.0, sound, visible, shake 1.0) at fpv_detonation.position; the
+    ending setting + button (action id 2). drone.cpp: detonations drained at launch, polled every tick; ending state:
+    Signal lost = FPV view forced, audio::set_static (white noise), render draws 320x180 point-filtered static + libfpv's
+    OSD (its font has a dark outline, no extra backing needed), 4 s; Cutscene = g_cam moved 14 m back
+    (against the drone's horizontal velocity) and 5 m up, ray-checked over 8 turns, looking at the blast +1 m, FOV 50,
+    5 s. Then stop() (Niko home). During the ending C/R/N and Move Niko are ignored. Niko dead -> stop(false).
+    K/X forwarded for the keyboard fallback.
+  - **VERIFIED in game (self-tested):** normal libfpv -> "no warhead", flight + car hit as before. Kamikaze dll: impact
+    into the car -> "warhead detonated (impact)", explosion, car health 0, static + BOOM + SIGNAL LOST readable, back to
+    Niko after 4 s; cutscene: outside shot of fireball, then burning wreck, back to Niko after 5 s; explode switch air
+    burst at 2.6 m from Niko: he survived, nearby car scorched. F8 "After the blast" button NOT clicked in game (no
+    input from session 0); the hiss NOT listened to.
+  - **Testing gotcha (new):** this session's WSL starts Windows processes in session 0 (Services): the game launches
+    without a window, `um win ps` lists nothing, gfxcapture fails. Workaround the user approved: temporary scheduled
+    task `schtasks /Create /TN gtaiv-fpv-test /TR "<PlayGTAIV.exe>" /SC ONCE /ST 23:59 /IT` + `schtasks /Run`, deleted
+    afterwards; screenshots via the mod itself (touch GTAIV/fpv-data/shot.txt -> fpv-data/shots/*.bmp). Stale
+    PlayGTAIV/Launcher from the previous night had to be killed first.
+
+- 2026-10-15 15:45: libfpv 6d0d258 draws "SIGNAL LOST" itself (OSD row 7, instead of BOOM, kept until repair, even
+  with the OSD disable switch on). The mod no longer writes its own text or dims the static behind it (user: the font
+  already has a dark background).
+  **VERIFIED in game**: one SIGNAL LOST, readable, through the whole 4 s.
+
 ## Next session — start here
+0. Ask the user to try kamikaze with the real radio (AUX7/AUX8 in the wizard), the F8 "After the blast" button, the
+   hiss level, and whether 4 s / 5 s and grenade size feel right.
 0. Ask the user how the streaming anchor and the two fixes (spawn under ground, OSD after Load) went; commit.
 0a. Ask the user to check the OSD disable switch (help boxes/subtitles gone) and the GPS home arrow (points at Niko).
 0b. Ask the user how the fisheye, HUD hiding and Move Niko here feel with the real radio (fisheye default strength?).

@@ -7,6 +7,7 @@
 #include "audio.h"
 #include "effects.h"
 #include "fpvapi.h"
+#include "kamikaze.h"
 #include "log.h"
 #include "render.h"
 #include "scripthook.h"
@@ -22,6 +23,10 @@ constexpr float kWidestAspect = 2.4f;  // frustum probes cover up to 21:9
 constexpr float kAnchorStart = 80.0f;  // drone this far from Niko: he starts following it
 constexpr float kAnchorStop = 40.0f;   // back this close to his spot: he goes home
 constexpr float kAnchorStep = 10.0f;   // re-place him once the drone is this far from him
+constexpr float kSignalLostSeconds = 4.0f;  // static in the goggles, then back to Niko
+constexpr float kCutsceneSeconds = 5.0f;    // outside shot of the blast, then back to Niko
+constexpr float kCutsceneDistance = 14.0f;  // camera back from the blast, horizontally
+constexpr float kCutsceneHeight = 5.0f;     // and up
 
 using fpvapi::fpv;
 
@@ -41,6 +46,16 @@ float g_near_clip = 0, g_fov = 0;  // last values sent to the game, for the trac
 std::mutex g_osd_mutex;  // guards g_osd_frame / g_osd_visible for the render thread
 fpv_frame g_osd_frame{};
 bool g_osd_visible = false;
+bool g_osd_no_signal = false;
+
+// Kamikaze builds: after the warhead went off, the flight ends with static in
+// the goggles or an outside shot of the blast, then Niko gets control back.
+struct Ending {
+    bool on = false;
+    kamikaze::Ending kind = kamikaze::Ending::SignalLost;
+    LARGE_INTEGER t0;
+};
+Ending g_ending;
 
 // The game streams map detail, LODs, collision and traffic around the player,
 // so far from Niko the drone would fly through a low-detail, empty city with
@@ -71,11 +86,12 @@ bool game_has_focus() {
 }
 
 // Keyboard fallback for players without a radio (libfpv: W/S throttle, A/D yaw,
-// arrows pitch/roll, Enter arms, T turtle, B beeper) and the F8 overlay's keys.
+// arrows pitch/roll, Enter arms, T turtle, B beeper; kamikaze builds: K bomb
+// arm, X explode) and the F8 overlay's keys.
 void forward_keys() {
     struct Key { int vk; int fpv; };
     static const Key keys[] = {
-        {'W', 'W'}, {'A', 'A'}, {'S', 'S'}, {'D', 'D'}, {'T', 'T'}, {'B', 'B'},
+        {'W', 'W'}, {'A', 'A'}, {'S', 'S'}, {'D', 'D'}, {'T', 'T'}, {'B', 'B'}, {'K', 'K'}, {'X', 'X'},
         {VK_RETURN, FPV_KEY_ENTER}, {VK_LEFT, FPV_KEY_LEFT}, {VK_RIGHT, FPV_KEY_RIGHT},
         {VK_UP, FPV_KEY_UP}, {VK_DOWN, FPV_KEY_DOWN}, {VK_F8, FPV_KEY_F8}, {VK_ESCAPE, FPV_KEY_ESCAPE},
         {VK_TAB, FPV_KEY_TAB}, {VK_BACK, FPV_KEY_BACKSPACE}, {VK_SPACE, FPV_KEY_SPACE},
@@ -289,6 +305,12 @@ void start() {
     }
     world::ignore_ped(ped);
     fpv.fpv_world_set_raycast_callback(&world::raycast, nullptr);
+    if (fpvapi::kamikaze()) {  // detonations of earlier drones are history
+        fpv_detonation d;
+        d.struct_size = sizeof d;
+        while (fpv.fpv_kamikaze_poll_detonation(&d)) {}
+    }
+    g_ending = Ending{};
     float home[3] = {x, y, z};
     fpv.fpv_gps_set_home(home);
 
@@ -328,11 +350,94 @@ void stop(bool go_home = true) {
         fpv.fpv_drone_delete(g_drone);
         g_drone = nullptr;
     }
+    g_ending = Ending{};
     {
         std::lock_guard<std::mutex> lock(g_osd_mutex);
         g_osd_visible = false;
+        g_osd_no_signal = false;
     }
     fpvlog::write("drone stopped");
+}
+
+float seconds_since(const LARGE_INTEGER &t) {
+    LARGE_INTEGER now, freq;
+    QueryPerformanceCounter(&now);
+    QueryPerformanceFrequency(&freq);
+    return float(now.QuadPart - t.QuadPart) / float(freq.QuadPart);
+}
+
+// Points the scripted camera from `from` at `at`, level (no roll).
+void aim_camera(const float from[3], const float at[3], float fov) {
+    float f[3] = {at[0] - from[0], at[1] - from[1], at[2] - from[2]};
+    float len = std::sqrt(f[0] * f[0] + f[1] * f[1] + f[2] * f[2]);
+    if (len < 1e-3f) return;
+    for (float &v : f) v /= len;
+    float r[3] = {f[1], -f[0], 0};  // forward x world up
+    float rl = std::sqrt(r[0] * r[0] + r[1] * r[1]);
+    if (rl < 1e-3f) r[0] = 1, r[1] = 0, rl = 1;
+    r[0] /= rl, r[1] /= rl;
+    float u[3] = {r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0]};
+    float pitch, roll, heading;
+    basis_to_euler(f, u, r, &pitch, &roll, &heading);
+    sh::call(N("SET_CAM_POS"), g_cam, from[0], from[1], from[2]);
+    sh::call(N("SET_CAM_ROT"), g_cam, pitch, roll, heading);
+    sh::call(N("SET_CAM_FOV"), g_cam, fov);
+    sh::call(N("SET_CAM_NEAR_CLIP"), g_cam, kNearClip);
+}
+
+// Cutscene: a camera behind and above where the drone came from, pulled in
+// front of any wall in the way, watching the blast.
+void place_blast_camera(const fpv_detonation &d) {
+    float back[2] = {-d.velocity[0], -d.velocity[1]};
+    float bl = std::sqrt(back[0] * back[0] + back[1] * back[1]);
+    if (bl < 1.0f) {  // dropped straight down or hovered: behind the lens instead
+        back[0] = -g_frame.camera.forward[0], back[1] = -g_frame.camera.forward[1];
+        bl = std::sqrt(back[0] * back[0] + back[1] * back[1]);
+    }
+    if (bl < 1e-3f) back[0] = 0, back[1] = -1, bl = 1;
+    back[0] /= bl, back[1] /= bl;
+    const float *n = d.normal;
+    bool has_normal = n[0] * n[0] + n[1] * n[1] + n[2] * n[2] > 0.5f;
+    float origin[3];  // off the surface, so the probes start in open air
+    for (int i = 0; i < 3; ++i) origin[i] = d.position[i] + (has_normal ? n[i] : (i == 2 ? 1.0f : 0.0f)) * 0.5f;
+    const float len = std::sqrt(kCutsceneDistance * kCutsceneDistance + kCutsceneHeight * kCutsceneHeight);
+    static const float kTurns[] = {0, 45, -45, 90, -90, 135, -135, 180};
+    float best[3] = {0, 0, 0}, best_clear = -1;
+    for (float turn : kTurns) {
+        float a = turn / kRadToDeg, c = std::cos(a), sn = std::sin(a);
+        float dir[3] = {(back[0] * c - back[1] * sn) * kCutsceneDistance / len,
+                        (back[0] * sn + back[1] * c) * kCutsceneDistance / len, kCutsceneHeight / len};
+        fpv_raycast_hit hit{};
+        float clear = world::raycast(nullptr, origin, dir, len, &hit) ? hit.distance : len;
+        if (clear > best_clear) {
+            best_clear = clear;
+            for (int i = 0; i < 3; ++i) best[i] = dir[i];
+        }
+        if (clear >= len * 0.9f) break;
+    }
+    float dist_out = best_clear * 0.85f < 2.5f ? 2.5f : best_clear * 0.85f;
+    float from[3], at[3] = {d.position[0], d.position[1], d.position[2] + 1.0f};  // the fireball rises
+    for (int i = 0; i < 3; ++i) from[i] = origin[i] + best[i] * dist_out;
+    aim_camera(from, at, 50.0f);
+    fpvlog::write("kamikaze: cutscene camera at %.2f %.2f %.2f (%.1f m clear)", from[0], from[1], from[2], best_clear);
+}
+
+void begin_ending(const fpv_detonation &d) {
+    g_ending.on = true;
+    g_ending.kind = tuning().after_blast == 1   ? kamikaze::Ending::Cutscene
+                    : tuning().after_blast == 0 ? kamikaze::Ending::SignalLost
+                                                : kamikaze::ending();
+    QueryPerformanceCounter(&g_ending.t0);
+    fpv.fpv_overlay_set_action(kMoveNikoAction, nullptr);  // nothing left to move Niko to
+    if (g_ending.kind == kamikaze::Ending::Cutscene) {
+        place_blast_camera(d);
+    } else {
+        g_view = View::Fpv;  // the goggles
+        audio::set_static(true);
+    }
+    std::lock_guard<std::mutex> lock(g_osd_mutex);
+    g_osd_visible = g_ending.kind == kamikaze::Ending::SignalLost;
+    g_osd_no_signal = g_osd_visible;
 }
 
 }  // namespace
@@ -390,10 +495,11 @@ void move_niko_here() {
 
 const fpv_frame &last_frame() { return g_frame; }
 
-bool osd_frame(fpv_frame *out) {
+bool osd_frame(fpv_frame *out, bool *no_signal) {
     std::lock_guard<std::mutex> lock(g_osd_mutex);
     if (!g_osd_visible) return false;
     *out = g_osd_frame;
+    *no_signal = g_osd_no_signal;
     return true;
 }
 
@@ -421,8 +527,12 @@ void tick() {
         }
         return;
     }
+    kamikaze::init();
     forward_keys();
     hold_player_for_overlay();
+    bool move_niko = false;  // F8 buttons work on foot too, but Move Niko here only in flight
+    for (uint32_t id; (id = fpv.fpv_overlay_poll_action()) != 0;)
+        if (!kamikaze::on_action(id)) move_niko |= id == kMoveNikoAction && !g_ending.on;
     if (!g_drone) return;
 
     LARGE_INTEGER now, freq;
@@ -434,10 +544,24 @@ void tick() {
 
     sh::call(N("HIDE_HUD_AND_RADAR_THIS_FRAME"));  // the radar and HUD would cover the FPV feed
 
-    bool move_niko = false;
-    for (uint32_t id; (id = fpv.fpv_overlay_poll_action()) != 0;) move_niko |= id == kMoveNikoAction;
+    uint32_t niko = 0;
+    sh::call(N("GET_PLAYER_CHAR"), g_player, &niko);
+    if (sh::call<bool>(N("IS_CHAR_DEAD"), niko)) {  // flew the warhead into himself: the game takes over
+        fpvlog::write("Niko died, drone stopped");
+        stop(false);
+        return;
+    }
+    if (g_ending.on) {
+        float limit = g_ending.kind == kamikaze::Ending::Cutscene ? kCutsceneSeconds : kSignalLostSeconds;
+        if (seconds_since(g_ending.t0) > limit) {
+            fpvlog::write("kamikaze: %s over, back to Niko",
+                          g_ending.kind == kamikaze::Ending::Cutscene ? "cutscene" : "signal lost");
+            stop();
+            return;
+        }
+    }
     bool camera_key = key_pressed('C'), reset_key = key_pressed('R'), niko_key = key_pressed('N');
-    if (!fpv.fpv_overlay_wants_input()) {  // otherwise the keys belong to the overlay
+    if (!fpv.fpv_overlay_wants_input() && !g_ending.on) {  // otherwise the keys belong to the overlay
         move_niko |= niko_key;
         if (camera_key) g_view = View((int(g_view) + 1) % int(View::Count));
         if (reset_key) {
@@ -470,13 +594,22 @@ void tick() {
     update_anchor(frame.position);
     update_home();
     if (frame.flags & FPV_DRONE_OSD_DISABLED) hide_game_text();
+    if (fpvapi::kamikaze()) {
+        fpv_detonation d;
+        d.struct_size = sizeof d;
+        while (fpv.fpv_kamikaze_poll_detonation(&d)) {
+            kamikaze::explode(d);
+            if (!g_ending.on) begin_ending(d);
+        }
+    }
     {
         std::lock_guard<std::mutex> lock(g_osd_mutex);
         g_osd_frame = frame;
-        g_osd_visible = g_view == View::Fpv;
+        if (!g_ending.on) g_osd_visible = g_view == View::Fpv;
     }
-    apply_camera(g_view == View::Fpv ? frame.camera : g_view == View::Chase ? frame.chase_camera : frame.los_camera,
-                 g_view == View::Fpv);
+    if (!g_ending.on || g_ending.kind == kamikaze::Ending::SignalLost)
+        apply_camera(g_view == View::Fpv ? frame.camera : g_view == View::Chase ? frame.chase_camera : frame.los_camera,
+                     g_view == View::Fpv);
 
     for (uint32_t i = 0; i < frame.impact_count && i < FPV_MAX_IMPACTS; ++i) {
         const fpv_impact &im = frame.impacts[i];

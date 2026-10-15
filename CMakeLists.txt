@@ -27,6 +27,7 @@ add_library(gtaiv_fpv_core SHARED
   src/drone.cpp
   src/effects.cpp
   src/fpvapi.cpp
+  src/kamikaze.cpp
   src/recon.cpp
   src/render.cpp
   src/world.cpp
@@ -41,7 +42,9 @@ target_compile_definitions(gtaiv_fpv_core PRIVATE FPVLOG_APPEND)
 foreach(target gtaiv_fpv_loader gtaiv_fpv_core)
   target_include_directories(${target} PRIVATE src "${LIBFPV_DIR}/include")
   # libfpv.dll is loaded at runtime; the header is only used for declarations.
-  target_compile_definitions(${target} PRIVATE LIBFPV_STATIC)
+  # Kamikaze declarations too: the core finds out at runtime whether the
+  # loaded libfpv.dll has them (src/fpvapi.cpp), so either build works.
+  target_compile_definitions(${target} PRIVATE LIBFPV_STATIC LIBFPV_KAMIKAZE)
   target_compile_options(${target} PRIVATE -Wall -Wextra -Wno-unused-parameter)
   target_link_options(${target} PRIVATE -static)
 endforeach()

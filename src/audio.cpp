@@ -20,6 +20,8 @@ constexpr int kBuffers = 4;        // ~46 ms queued
 
 HANDLE g_thread = nullptr;
 std::atomic<bool> g_run{false};
+std::atomic<bool> g_static{false};
+constexpr float kStaticLevel = 0.06f;  // the motors are around 0.04 RMS
 
 DWORD WINAPI thread_main(void *) {
     HANDLE ev = CreateEventA(nullptr, FALSE, FALSE, nullptr);
@@ -50,8 +52,14 @@ DWORD WINAPI thread_main(void *) {
         for (int i = 0; i < kBuffers; ++i) {
             if (!(hdr[i].dwFlags & WHDR_DONE)) continue;
             fpv.fpv_audio_read(mix, kFrames);
+            bool hiss = g_static;
+            static uint32_t seed = 0x9e3779b9u;
             for (uint32_t s = 0; s < kFrames * kChannels; ++s) {
                 float v = std::isfinite(mix[s]) ? mix[s] : 0.0f;
+                if (hiss) {  // white noise, xorshift32
+                    seed ^= seed << 13, seed ^= seed >> 17, seed ^= seed << 5;
+                    v += (float(seed >> 8) / 8388608.0f - 1.0f) * kStaticLevel;
+                }
                 v = v < -1 ? -1 : v > 1 ? 1 : v;
                 pcm[i][s] = short(v * 32767.0f);
             }
@@ -77,7 +85,10 @@ void start() {
     fpvlog::write("audio: %s", g_thread ? "started" : "thread creation failed");
 }
 
+void set_static(bool on) { g_static = on; }
+
 void stop() {
+    g_static = false;
     if (!g_thread) return;
     g_run = false;
     WaitForSingleObject(g_thread, 2000);
