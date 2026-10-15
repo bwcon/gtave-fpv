@@ -24,8 +24,8 @@ const fpv_frame &last_frame();
 // is flying or a third-person camera is on. Any thread.
 bool osd_frame(fpv_frame *out);
 
-// Host-injected radio channels (AETR, AUX1..4, -1..1), overriding devices for 0.5 s.
-void inject_channels(const float channels[8]);
+// Host-injected radio channels (AETR, AUX1..6, -1..1), overriding devices for 0.5 s.
+void inject_channels(const float channels[FPV_CHANNEL_COUNT]);
 
 // Test knobs for the autotest (0 / negative = normal behaviour).
 struct Tuning {
@@ -38,6 +38,7 @@ struct Tuning {
     float seconds = 20;        // autotest flight length
     bool long_range = false;   // autotest climbs 35 m before cruising, for long-range streaming tests
     bool in_car = false;       // autotest puts Niko in the target car before the launch
+    bool osd_off = false;      // autotest flies with the OSD disable switch (AUX6) on
 };
 Tuning &tuning();
 

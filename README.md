@@ -5,8 +5,8 @@
 Fly an FPV drone through Liberty City with your own radio. Press F7 and Niko
 launches a quad from the street in front of him. It is simulated by 
 [libfpv](https://github.com/hammerill/libfpv), which
-runs real Betaflight firmware, so rates, angle mode, arming and turtle mode
-behave as they do on a real quad.
+runs real Betaflight firmware, so rates, angle mode, air mode, arming and
+turtle mode behave as they do on a real quad.
 
 ## Features
 
@@ -16,14 +16,20 @@ behave as they do on a real quad.
 - **Three cameras**: FPV (the goggles view, with a fisheye lens), chase and
   line of sight from where Niko stands.
 - **Betaflight OSD** in the FPV view: battery, cell voltage, current, flight
-  timer and mode.
+  timer and mode. The GPS elements work too (speed, altitude, vario, distance
+  flown, home arrow and distance); turn them on in Configurator's OSD tab.
+  Home is Niko, so the arrow always points back to him.
 - **Collides with the world**: buildings, the road, cars, peds and props, all
   through the engine's own physics probe. Crashes break props and burn
   motors.
 - **Crash effects**: a fast hit knocks a ped over (ragdoll and damage), dents
   a car or shoves a prop.
 - **Motor sound** from libfpv's synthesizer.
-- **Clean view**: the minimap and HUD are hidden while you fly.
+- **Clean view**: the minimap and HUD are hidden while you fly. Put
+  Betaflight's OSD disable on a switch (the radio wizard asks for one) to
+  hide the OSD, help boxes and subtitles too, for recording. Subtitles that
+  appear while the switch is on are skipped. Mission markers and other
+  things drawn in the world stay.
 - **Move Niko here**: ends the flight with Niko standing where the drone is,
   facing the way it faced.
 
@@ -133,7 +139,7 @@ what was verified in game.
 road, launches the drone and flies a fixed stick sequence, logging
 everything. Knobs: `car`/`ped` (crash target), `hover`, `still`, `cam`
 (camera-axis test), `niko` (end with Move Niko here), `secs=`, `fov=`,
-`near=`, `osd=`. **Delete the file afterwards.** Otherwise every game start
+`near=`, `osd=`, `osdoff` (fly with the OSD disable switch on). **Delete the file afterwards.** Otherwise every game start
 runs the test.
 
 ## Credits

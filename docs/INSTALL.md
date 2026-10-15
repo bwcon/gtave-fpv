@@ -60,7 +60,10 @@ Start the game, load a save and press **F7**. Niko launches the drone.
 | N | Move Niko to the drone |
 
 - **Radio:** plug it in (USB joystick mode), press F8 and follow the radio
-  setup wizard once. Your setup is remembered.
+  setup wizard once. Your setup is remembered. Besides arm, it asks for
+  angle mode, beeper, turtle, air mode and OSD disable switches; skip any
+  you don't want. OSD disable gives a clean picture for recording: no OSD
+  and no game text.
 - **Keyboard:** Enter arms, W/S is throttle, A/D is yaw, and the arrow keys
   are pitch and roll.
 - **Gamepad:** works too.

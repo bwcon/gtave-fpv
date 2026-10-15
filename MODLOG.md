@@ -244,8 +244,20 @@ world collision, impacts that ragdoll/damage peds and vehicles.
     **Both fixes NOT yet verified; the user is testing.** Unhandled: loading a save while flying.
   - autotest knobs: `far` (climb 35 m, cruise from 12 s), `incar` (Niko in the target car at launch).
 
+- 2026-10-15 02:50: Synced with libfpv 81afd28 (from 41c30f1: GPS, OSD foreground layer, air mode AUX5, OSD disable AUX6).
+  - fpv_frame.channels is now FPV_CHANNEL_COUNT (10): rebuilt; inject_channels/autotest send 10 channels.
+  - fpv_gps_set_home bound (new export: an old libfpv.dll now fails to load, restart the game after deploy). Home = Niko:
+    set at launch, then every tick to his position, or to g_anchor.home while he rides along as the streaming anchor.
+  - FPV_DRONE_OSD_DISABLED (libfpv INTEGRATION.md "OSD disable switch"): every flight tick with the flag,
+    HIDE_HELP_TEXT_THIS_FRAME + CLEAR_PRINTS (subtitles have no per-frame hide, so ones printed meanwhile are lost).
+    HUD/radar were already hidden; world markers stay (README says so). Mod draws nothing else of its own in flight.
+  - autotest knob `osdoff` (AUX6 high). **VERIFIED** cold start: libfpv ran "enabling Betaflight's GPS feature" and
+    "upgrading Betaflight configuration for new mode switches" on the existing EEPROM, flags 0x241/0x260 (0x200 set),
+    hover stable, no native errors. Help/subtitle hiding and the GPS home arrow NOT yet seen on screen by the user.
+
 ## Next session — start here
 0. Ask the user how the streaming anchor and the two fixes (spawn under ground, OSD after Load) went; commit.
+0a. Ask the user to check the OSD disable switch (help boxes/subtitles gone) and the GPS home arrow (points at Niko).
 0b. Ask the user how the fisheye, HUD hiding and Move Niko here feel with the real radio (fisheye default strength?).
 1. Check the overlay with real mouse use (GTA may clip/hide the cursor; GetCursorPos may stick) - needs the user.
 2. Polish: frame.altitude -1 when > a few m up (libfpv probe range?); tune effect strengths with the user.

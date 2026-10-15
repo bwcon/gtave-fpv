@@ -226,6 +226,29 @@ void update_anchor(const float drone_pos[3]) {
     }
 }
 
+// Betaflight's home arrow, home distance and GPS Rescue lead back to Niko,
+// even if he was pushed or his car rolled away. While he rides along as the
+// streaming anchor, home is the spot he goes back to.
+void update_home() {
+    float home[3];
+    if (g_anchor.on) {
+        for (int i = 0; i < 3; ++i) home[i] = g_anchor.home[i];
+    } else {
+        uint32_t ped = 0;
+        sh::call(N("GET_PLAYER_CHAR"), g_player, &ped);
+        sh::call(N("GET_CHAR_COORDINATES"), ped, &home[0], &home[1], &home[2]);
+    }
+    fpv.fpv_gps_set_home(home);
+}
+
+// The pilot's OSD disable switch asks for nothing on top of the video. The
+// HUD and radar are already hidden in flight; help boxes and subtitles are
+// not. Subtitles have no per-frame hide, so the ones printed meanwhile are dropped.
+void hide_game_text() {
+    sh::call(N("HIDE_HELP_TEXT_THIS_FRAME"));
+    sh::call(N("CLEAR_PRINTS"));
+}
+
 void start() {
     if (!fpvapi::load()) {
         print("FPV: libfpv failed to load, see GTAIV.FPV.log");
@@ -266,6 +289,8 @@ void start() {
     }
     world::ignore_ped(ped);
     fpv.fpv_world_set_raycast_callback(&world::raycast, nullptr);
+    float home[3] = {x, y, z};
+    fpv.fpv_gps_set_home(home);
 
     sh::call(N("SET_PLAYER_CONTROL"), g_player, false);
     sh::call(N("CREATE_CAM"), 14u, &g_cam);
@@ -332,8 +357,8 @@ void basis_to_euler(const float f[3], const float u[3], const float r[3], float 
     }
 }
 
-void inject_channels(const float channels[8]) {
-    if (fpvapi::loaded()) fpv.fpv_input_set_channels(channels, 8);
+void inject_channels(const float channels[FPV_CHANNEL_COUNT]) {
+    if (fpvapi::loaded()) fpv.fpv_input_set_channels(channels, FPV_CHANNEL_COUNT);
 }
 
 bool active() { return g_drone != nullptr; }
@@ -443,6 +468,8 @@ void tick() {
     if (frame.sim_time < g_first_sim_time + 0.05) return;
     g_frame = frame;
     update_anchor(frame.position);
+    update_home();
+    if (frame.flags & FPV_DRONE_OSD_DISABLED) hide_game_text();
     {
         std::lock_guard<std::mutex> lock(g_osd_mutex);
         g_osd_frame = frame;

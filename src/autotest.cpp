@@ -31,7 +31,8 @@ bool g_cam_mode = false;  // "cam": camera rotation-order test instead of a flig
 // autotest.txt: "car" or "ped" target, "cam" test, "still" (drone stays on the
 // ground), "hover", "niko" (end with Move Niko here), and knobs fov=<deg>
 // near=<m> osd=<0|1> secs=<flight seconds>, "far" (climb 35 m, then cruise),
-// "incar" (Niko sits in the target car at launch).
+// "incar" (Niko sits in the target car at launch), "osdoff" (OSD disable
+// switch on: no OSD, no game text).
 void read_config() {
     char buf[256] = {};
     if (FILE *f = std::fopen("fpv-data\\autotest.txt", "r")) {
@@ -47,6 +48,7 @@ void read_config() {
     t.move_niko = std::strstr(buf, "niko") != nullptr;
     t.long_range = std::strstr(buf, "far") != nullptr;
     t.in_car = std::strstr(buf, "incar") != nullptr;
+    t.osd_off = std::strstr(buf, "osdoff") != nullptr;
     if (const char *p = std::strstr(buf, "secs=")) t.seconds = float(std::atof(p + 5));
     if (const char *p = std::strstr(buf, "fov=")) t.fov = float(std::atof(p + 4));
     if (const char *p = std::strstr(buf, "near=")) t.near_clip = float(std::atof(p + 5));
@@ -168,7 +170,8 @@ void probe_sweep() {
 
 float g_hold_z = 0;
 
-// AETR + AUX1 arm, AUX2 angle mode, AUX3 beeper, AUX4 turtle. A crude
+// AETR + AUX1 arm, AUX2 angle mode, AUX3 beeper, AUX4 turtle, AUX5 air mode,
+// AUX6 OSD disable. A crude
 // altitude hold keeps it kHoldHeight up while it cruises forward.
 void sticks(float t) {
     const fpv_frame &f = drone::last_frame();
@@ -176,7 +179,7 @@ void sticks(float t) {
     if (g_hold_z == 0 && t > 0.5f)  // after the first fresh frame
         g_hold_z = f.position[2] + (tu.long_range ? 35.0f : tu.hover ? 2.5f : kHoldHeight);
     const float cruise_at = tu.long_range ? 12.0f : 5.0f;  // "far" climbs first
-    float ch[8] = {0, 0, -1, 0, -1, 1, -1, -1};
+    float ch[FPV_CHANNEL_COUNT] = {0, 0, -1, 0, -1, 1, -1, -1, -1, tu.osd_off ? 1.0f : -1.0f};
     if (!drone::tuning().armed_flight) {  // parked: a still image for flicker checks
         drone::inject_channels(ch);
         return;
