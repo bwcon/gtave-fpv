@@ -89,9 +89,12 @@ bool game_has_focus() {
 // arrows pitch/roll, Enter arms, T turtle, B beeper; kamikaze builds: K bomb
 // arm, X explode) and the F8 overlay's keys.
 void forward_keys() {
-    struct Key { int vk; int fpv; };
+    // letters by scan code (physical position, as libfpv wants): on AZERTY the
+    // throttle/yaw keys are labelled Z/Q/S/D, and their VKs are 'Z'/'Q'/'S'/'D'
+    struct Key { int vk; int fpv; UINT sc; };
     static const Key keys[] = {
-        {'W', 'W'}, {'A', 'A'}, {'S', 'S'}, {'D', 'D'}, {'T', 'T'}, {'B', 'B'}, {'K', 'K'}, {'X', 'X'},
+        {0, 'W', 0x11}, {0, 'A', 0x1E}, {0, 'S', 0x1F}, {0, 'D', 0x20},
+        {0, 'T', 0x14}, {0, 'B', 0x30}, {0, 'K', 0x25}, {0, 'X', 0x2D},
         {VK_RETURN, FPV_KEY_ENTER}, {VK_LEFT, FPV_KEY_LEFT}, {VK_RIGHT, FPV_KEY_RIGHT},
         {VK_UP, FPV_KEY_UP}, {VK_DOWN, FPV_KEY_DOWN}, {VK_F8, FPV_KEY_F8}, {VK_ESCAPE, FPV_KEY_ESCAPE},
         {VK_TAB, FPV_KEY_TAB}, {VK_BACK, FPV_KEY_BACKSPACE}, {VK_SPACE, FPV_KEY_SPACE},
@@ -99,8 +102,11 @@ void forward_keys() {
     static bool was_down[sizeof(keys) / sizeof(keys[0])];
     static bool primed = false;  // a key already held when we start is not a press
     bool focus = game_has_focus();
+    // the layout is per thread: take the game window's, not this script thread's
+    HKL layout = GetKeyboardLayout(GetWindowThreadProcessId(GetForegroundWindow(), nullptr));
     for (size_t i = 0; i < sizeof(keys) / sizeof(keys[0]); ++i) {
-        bool down = focus && (GetAsyncKeyState(keys[i].vk) & 0x8000) != 0;
+        int vk = keys[i].sc ? (int)MapVirtualKeyExW(keys[i].sc, MAPVK_VSC_TO_VK, layout) : keys[i].vk;
+        bool down = focus && vk && (GetAsyncKeyState(vk) & 0x8000) != 0;
         if (primed && down != was_down[i]) fpv.fpv_input_key(keys[i].fpv, down);
         was_down[i] = down;
     }
