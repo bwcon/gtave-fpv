@@ -64,7 +64,7 @@ delay and fuse sensitivity are in F8 > Fly. The ending choice is saved in
 | F8 | Settings overlay (radio setup, rates, OSD, camera, fisheye strength) |
 | C | Cycle cameras: FPV, chase, line of sight |
 | R | Respawn the drone at its launch point, repaired |
-| N | Move Niko here (also a button in F8 > Fly) |
+| Y | Move Niko here (also a button in F8 > Fly) |
 
 Without a radio, the keyboard works as a fallback. Enter arms, W/S is
 throttle, A/D is yaw, and the arrow keys are pitch and roll. A gamepad works

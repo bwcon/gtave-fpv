@@ -329,7 +329,7 @@ void start() {
     g_first_sim_time = -1;
     g_view = View::Fpv;
     audio::start();
-    fpv.fpv_overlay_set_action(kMoveNikoAction, "Move Niko here (N)");
+    fpv.fpv_overlay_set_action(kMoveNikoAction, "Move Niko here (Y)");
 
     fpv_input_status st{};
     st.struct_size = sizeof st;
@@ -566,7 +566,7 @@ void tick() {
             return;
         }
     }
-    bool camera_key = key_pressed('C'), reset_key = key_pressed('R'), niko_key = key_pressed('N');
+    bool camera_key = key_pressed('C'), reset_key = key_pressed('R'), niko_key = key_pressed('Y');
     if (!fpv.fpv_overlay_wants_input() && !g_ending.on) {  // otherwise the keys belong to the overlay
         move_niko |= niko_key;
         if (camera_key) g_view = View((int(g_view) + 1) % int(View::Count));

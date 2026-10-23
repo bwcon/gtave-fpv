@@ -286,6 +286,10 @@ world collision, impacts that ragdoll/damage peds and vehicles.
   already has a dark background).
   **VERIFIED in game**: one SIGNAL LOST, readable, through the whole 4 s.
 
+- 2026-10-24: drone letter keys are polled by scan code through the game window's layout (AZERTY had W/A/S/D
+  scattered). Move Niko here moved from N to Y, the key libfpv's INTEGRATION.md recommends (sm64ex-fpv uses it too).
+  NOT compiled or tested in game (written on the Mac, no MinGW).
+
 ## Next session — start here
 0. Ask the user to try kamikaze with the real radio (AUX7/AUX8 in the wizard), the F8 "After the blast" button, the
    hiss level, and whether 4 s / 5 s and grenade size feel right.

@@ -57,7 +57,7 @@ Start the game, load a save and press **F7**. Niko launches the drone.
 | F8 | Settings: radio setup, rates, OSD, camera |
 | C | Cycle cameras: FPV, chase, line of sight |
 | R | Respawn the drone, repaired |
-| N | Move Niko to the drone |
+| Y | Move Niko to the drone |
 
 - **Radio:** plug it in (USB joystick mode), press F8 and follow the radio
   setup wizard once. Your setup is remembered. Besides arm, it asks for
