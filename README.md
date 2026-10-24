@@ -35,9 +35,12 @@ turtle mode behave as they do on a real quad.
 - **Kamikaze** (only with a kamikaze build of libfpv, see below): the drone
   carries a warhead. A detonation sets off a grenade-sized GTA explosion
   where it happened. Then either the goggles show static with "SIGNAL LOST"
-  for 4 seconds, or an outside camera shows the blast for 5 seconds
-  ("Cutscene"). After that you control Niko again. Pick the ending with the
-  "After the blast" button in F8 > Fly.
+  (the game's HUD and text hidden), or an outside camera shows the blast
+  ("Cutscene"), for 3 seconds by default. After that a new drone waits at
+  the launch spot (respawn), the flight ends and you control Niko again
+  (recall), or the view stays until you act (nothing). Pick all three in
+  libfpv's F8 > Kamikaze tab. During the view, R (respawn), F7 (back to
+  Niko) and Y (Move Niko here) work at once.
 
 ## Kamikaze
 
@@ -53,8 +56,9 @@ off and flip the switch, and after the arming delay (OSD `ARMING 3`, then
 does the explode switch (AUX8). Without a radio, K toggles the bomb switch
 and X held is the explode switch. On a gamepad, X/Square toggles the bomb
 switch and the right shoulder button is the explode switch. Payload, arming
-delay and fuse sensitivity are in F8 > Fly. The ending choice is saved in
-`GTAIV/fpv-data/gtaiv-fpv.ini`.
+delay, fuse sensitivity and the ending are in F8 > Kamikaze, saved by libfpv
+in `GTAIV/fpv-data/settings.json`. The ending timer runs on game time, so it
+waits while the pause menu is open.
 
 ## Controls
 
@@ -166,8 +170,9 @@ everything. Knobs: `car`/`ped` (crash target), `hover`, `still`, `cam`
 (camera-axis test), `niko` (end with Move Niko here), `secs=`, `fov=`,
 `near=`, `osd=`, `osdoff` (fly with the OSD disable switch on), and with a
 kamikaze libfpv `boom` (arm the warhead in flight and hit the target),
-`boomsw` (air burst with the explode switch), and `signal`/`cutscene` (force
-an ending). **Delete the file afterwards.** Otherwise every game start
+`boomsw` (air burst with the explode switch), and to force an ending
+`signal`/`cutscene` (the view), `respawn`/`recall`/`hold` (what follows) and
+`dur=<s>` (its length). **Delete the file afterwards.** Otherwise every game start
 runs the test.
 
 Creating `GTAIV/fpv-data/shot.txt` saves the next finished frame, with the

@@ -290,9 +290,23 @@ world collision, impacts that ragdoll/damage peds and vehicles.
   scattered). Move Niko here moved from N to Y, the key libfpv's INTEGRATION.md recommends (sm64ex-fpv uses it too).
   NOT compiled or tested in game (written on the Mac, no MinGW).
 
+- 2026-10-24: **Generalized kamikaze ending** (libfpv's KAMIKAZE_ENDING contract: `fpv_kamikaze_set_ending_support`,
+  `fpv_kamikaze_config.ending_view/ending_then` after `ending_duration`). The F8 > Fly "After the blast" button and
+  fpv-data/gtaiv-fpv.ini are gone (init clears action id 2 left by an older core); the choice lives in libfpv's
+  F8 > Kamikaze tab. kamikaze::init calls set_ending_support(all views, all thens, SIGNAL_LOST, RESPAWN) when the dll
+  has it (optional GetProcAddress; older kamikaze dlls -> signal lost / 3 s / respawn). fpv_kamikaze_get_config is
+  now part of the required kamikaze set. At the detonation drone.cpp reads view/duration/then: signal lost = static +
+  libfpv's SIGNAL LOST, HUD hidden + HIDE_HELP_TEXT/CLEAR_PRINTS every tick; cutscene = the old blast camera.
+  Timer = clamped script-tick dt, not counted while IS_PAUSE_MENU_ACTIVE. Then RESPAWN = repair + reset at the spawn
+  (Niko's anchor home first), RECALL = stop() like F7, NOTHING = hold. Duration 0 skips the view (with NOTHING the view
+  is held anyway, else the frozen wreck would just sit there). During the view R / F7 / Y (and the F8 Move Niko button)
+  act at once; C is ignored. R now does repair before reset (INTEGRATION.md order). Autotest knobs
+  `respawn`/`recall`/`hold`, `dur=<s>`. Pilot visibility untouched (out of scope for IV).
+  Built against libfpv with the new header; NOT tested in game.
+
 ## Next session — start here
-0. Ask the user to try kamikaze with the real radio (AUX7/AUX8 in the wizard), the F8 "After the blast" button, the
-   hiss level, and whether 4 s / 5 s and grenade size feel right.
+0. Test the new ending in game with a kamikaze libfpv (autotest `boom` + `signal`/`cutscene` x `respawn`/`recall`/
+   `hold`, and R/F7/Y during the view); ask the user about the hiss level and grenade size.
 0. Ask the user how the streaming anchor and the two fixes (spawn under ground, OSD after Load) went; commit.
 0a. Ask the user to check the OSD disable switch (help boxes/subtitles gone) and the GPS home arrow (points at Niko).
 0b. Ask the user how the fisheye, HUD hiding and Move Niko here feel with the real radio (fisheye default strength?).

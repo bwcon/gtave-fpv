@@ -34,7 +34,8 @@ bool g_cam_mode = false;  // "cam": camera rotation-order test instead of a flig
 // "incar" (Niko sits in the target car at launch), "osdoff" (OSD disable
 // switch on: no OSD, no game text), kamikaze builds: "boom" (bomb arm switch
 // on in flight, then into the target), "boomsw" (explode switch at 9 s
-// instead), "signal" / "cutscene" (ending, instead of the player's choice).
+// instead), "signal" / "cutscene" (ending view), "respawn" / "recall" / "hold"
+// (what follows it) and dur=<s> (its length), instead of the player's choice.
 void read_config() {
     char buf[256] = {};
     if (FILE *f = std::fopen("fpv-data\\autotest.txt", "r")) {
@@ -54,6 +55,11 @@ void read_config() {
     t.bomb = std::strstr(buf, "boom") != nullptr;
     t.explode_switch = std::strstr(buf, "boomsw") != nullptr;
     t.after_blast = std::strstr(buf, "cutscene") ? 1 : std::strstr(buf, "signal") ? 0 : -1;
+    t.ending_then = std::strstr(buf, "respawn")  ? FPV_KAMIKAZE_THEN_RESPAWN
+                    : std::strstr(buf, "recall") ? FPV_KAMIKAZE_THEN_RECALL
+                    : std::strstr(buf, "hold")   ? FPV_KAMIKAZE_THEN_NOTHING
+                                                 : -1;
+    if (const char *p = std::strstr(buf, "dur=")) t.ending_seconds = float(std::atof(p + 4));
     if (const char *p = std::strstr(buf, "secs=")) t.seconds = float(std::atof(p + 5));
     if (const char *p = std::strstr(buf, "fov=")) t.fov = float(std::atof(p + 4));
     if (const char *p = std::strstr(buf, "near=")) t.near_clip = float(std::atof(p + 5));

@@ -23,8 +23,6 @@ constexpr float kWidestAspect = 2.4f;  // frustum probes cover up to 21:9
 constexpr float kAnchorStart = 80.0f;  // drone this far from Niko: he starts following it
 constexpr float kAnchorStop = 40.0f;   // back this close to his spot: he goes home
 constexpr float kAnchorStep = 10.0f;   // re-place him once the drone is this far from him
-constexpr float kSignalLostSeconds = 4.0f;  // static in the goggles, then back to Niko
-constexpr float kCutsceneSeconds = 5.0f;    // outside shot of the blast, then back to Niko
 constexpr float kCutsceneDistance = 14.0f;  // camera back from the blast, horizontally
 constexpr float kCutsceneHeight = 5.0f;     // and up
 
@@ -48,12 +46,14 @@ fpv_frame g_osd_frame{};
 bool g_osd_visible = false;
 bool g_osd_no_signal = false;
 
-// Kamikaze builds: after the warhead went off, the flight ends with static in
-// the goggles or an outside shot of the blast, then Niko gets control back.
+// Kamikaze builds: after the warhead went off, static in the goggles or an
+// outside shot of the blast for the player's duration, then a respawn, the
+// end of the flight or nothing (the view stays until the player acts). The
+// player's own R / F7 / Y work at once and replace what comes next.
 struct Ending {
     bool on = false;
-    kamikaze::Ending kind = kamikaze::Ending::SignalLost;
-    LARGE_INTEGER t0;
+    kamikaze::Ending choice;
+    float elapsed = 0;  // game time: stops while the game is paused
 };
 Ending g_ending;
 
@@ -95,9 +95,9 @@ void forward_keys() {
     static const Key keys[] = {
         {0, 'W', 0x11}, {0, 'A', 0x1E}, {0, 'S', 0x1F}, {0, 'D', 0x20},
         {0, 'T', 0x14}, {0, 'B', 0x30}, {0, 'K', 0x25}, {0, 'X', 0x2D},
-        {VK_RETURN, FPV_KEY_ENTER}, {VK_LEFT, FPV_KEY_LEFT}, {VK_RIGHT, FPV_KEY_RIGHT},
-        {VK_UP, FPV_KEY_UP}, {VK_DOWN, FPV_KEY_DOWN}, {VK_F8, FPV_KEY_F8}, {VK_ESCAPE, FPV_KEY_ESCAPE},
-        {VK_TAB, FPV_KEY_TAB}, {VK_BACK, FPV_KEY_BACKSPACE}, {VK_SPACE, FPV_KEY_SPACE},
+        {VK_RETURN, FPV_KEY_ENTER, 0}, {VK_LEFT, FPV_KEY_LEFT, 0}, {VK_RIGHT, FPV_KEY_RIGHT, 0},
+        {VK_UP, FPV_KEY_UP, 0}, {VK_DOWN, FPV_KEY_DOWN, 0}, {VK_F8, FPV_KEY_F8, 0}, {VK_ESCAPE, FPV_KEY_ESCAPE, 0},
+        {VK_TAB, FPV_KEY_TAB, 0}, {VK_BACK, FPV_KEY_BACKSPACE, 0}, {VK_SPACE, FPV_KEY_SPACE, 0},
     };
     static bool was_down[sizeof(keys) / sizeof(keys[0])];
     static bool primed = false;  // a key already held when we start is not a press
@@ -365,13 +365,6 @@ void stop(bool go_home = true) {
     fpvlog::write("drone stopped");
 }
 
-float seconds_since(const LARGE_INTEGER &t) {
-    LARGE_INTEGER now, freq;
-    QueryPerformanceCounter(&now);
-    QueryPerformanceFrequency(&freq);
-    return float(now.QuadPart - t.QuadPart) / float(freq.QuadPart);
-}
-
 // Points the scripted camera from `from` at `at`, level (no roll).
 void aim_camera(const float from[3], const float at[3], float fov) {
     float f[3] = {at[0] - from[0], at[1] - from[1], at[2] - from[2]};
@@ -428,22 +421,49 @@ void place_blast_camera(const fpv_detonation &d) {
     fpvlog::write("kamikaze: cutscene camera at %.2f %.2f %.2f (%.1f m clear)", from[0], from[1], from[2], best_clear);
 }
 
+bool signal_lost() { return g_ending.on && g_ending.choice.view == FPV_KAMIKAZE_VIEW_SIGNAL_LOST; }
+
 void begin_ending(const fpv_detonation &d) {
+    g_ending = Ending{};
     g_ending.on = true;
-    g_ending.kind = tuning().after_blast == 1   ? kamikaze::Ending::Cutscene
-                    : tuning().after_blast == 0 ? kamikaze::Ending::SignalLost
-                                                : kamikaze::ending();
-    QueryPerformanceCounter(&g_ending.t0);
-    fpv.fpv_overlay_set_action(kMoveNikoAction, nullptr);  // nothing left to move Niko to
-    if (g_ending.kind == kamikaze::Ending::Cutscene) {
+    kamikaze::Ending &e = g_ending.choice;
+    e = kamikaze::ending();
+    const Tuning &t = tuning();  // autotest overrides
+    if (t.after_blast >= 0) e.view = t.after_blast == 1 ? FPV_KAMIKAZE_VIEW_CUTSCENE : FPV_KAMIKAZE_VIEW_SIGNAL_LOST;
+    if (t.ending_then >= 0) e.then = fpv_kamikaze_ending_then(t.ending_then);
+    if (t.ending_seconds >= 0) e.seconds = t.ending_seconds;
+    // Nothing next and no view would leave the frozen wreck on screen: show the view.
+    if (e.seconds <= 0 && e.then == FPV_KAMIKAZE_THEN_NOTHING) e.seconds = 1e9f;
+    fpvlog::write("kamikaze: ending %s for %.1f s, then %s", e.seconds > 0 ? kamikaze::view_name(e.view) : "skipped",
+                  e.seconds, kamikaze::then_name(e.then));
+    if (e.seconds <= 0) return;  // the next tick does the "then"
+    if (e.view == FPV_KAMIKAZE_VIEW_CUTSCENE) {
         place_blast_camera(d);
     } else {
         g_view = View::Fpv;  // the goggles
         audio::set_static(true);
     }
     std::lock_guard<std::mutex> lock(g_osd_mutex);
-    g_osd_visible = g_ending.kind == kamikaze::Ending::SignalLost;
+    g_osd_visible = e.view == FPV_KAMIKAZE_VIEW_SIGNAL_LOST;
     g_osd_no_signal = g_osd_visible;
+}
+
+// Leaves the ending view: back to the goggles.
+void end_ending() {
+    if (!g_ending.on) return;
+    if (signal_lost()) audio::set_static(false);
+    g_ending = Ending{};
+    g_view = View::Fpv;
+    std::lock_guard<std::mutex> lock(g_osd_mutex);
+    g_osd_no_signal = false;
+}
+
+// A new drone at the launch spot (R, or the ending's "respawn").
+void respawn() {
+    end_ending();
+    anchor_end(true);  // Niko home first: the spawn's collision must be streamed in
+    fpv.fpv_drone_repair(g_drone);
+    fpv.fpv_drone_reset(g_drone, g_spawn_pos, g_spawn_rot);
 }
 
 }  // namespace
@@ -537,8 +557,7 @@ void tick() {
     forward_keys();
     hold_player_for_overlay();
     bool move_niko = false;  // F8 buttons work on foot too, but Move Niko here only in flight
-    for (uint32_t id; (id = fpv.fpv_overlay_poll_action()) != 0;)
-        if (!kamikaze::on_action(id)) move_niko |= id == kMoveNikoAction && !g_ending.on;
+    for (uint32_t id; (id = fpv.fpv_overlay_poll_action()) != 0;) move_niko |= id == kMoveNikoAction;
     if (!g_drone) return;
 
     LARGE_INTEGER now, freq;
@@ -557,29 +576,34 @@ void tick() {
         stop(false);
         return;
     }
-    if (g_ending.on) {
-        float limit = g_ending.kind == kamikaze::Ending::Cutscene ? kCutsceneSeconds : kSignalLostSeconds;
-        if (seconds_since(g_ending.t0) > limit) {
-            fpvlog::write("kamikaze: %s over, back to Niko",
-                          g_ending.kind == kamikaze::Ending::Cutscene ? "cutscene" : "signal lost");
-            stop();
-            return;
-        }
-    }
     bool camera_key = key_pressed('C'), reset_key = key_pressed('R'), niko_key = key_pressed('Y');
-    if (!fpv.fpv_overlay_wants_input() && !g_ending.on) {  // otherwise the keys belong to the overlay
+    if (!fpv.fpv_overlay_wants_input()) {  // otherwise the keys belong to the overlay
         move_niko |= niko_key;
-        if (camera_key) g_view = View((int(g_view) + 1) % int(View::Count));
+        if (camera_key && !g_ending.on) g_view = View((int(g_view) + 1) % int(View::Count));
         if (reset_key) {
-            anchor_end(true);  // Niko home first: the spawn's collision must be streamed in
-            fpv.fpv_drone_reset(g_drone, g_spawn_pos, g_spawn_rot);
-            fpv.fpv_drone_repair(g_drone);
+            if (g_ending.on) fpvlog::write("kamikaze: respawn (R) during the ending");
+            respawn();
         }
     }
     if (move_niko) {
+        if (g_ending.on) fpvlog::write("kamikaze: Move Niko here during the ending");
         move_niko_here();
         return;
     }
+    if (g_ending.on) {
+        // The pause menu stops the game; the script thread may still tick.
+        if (!sh::call<bool>(N("IS_PAUSE_MENU_ACTIVE"))) g_ending.elapsed += dt;
+        const kamikaze::Ending &e = g_ending.choice;
+        if (e.then != FPV_KAMIKAZE_THEN_NOTHING && g_ending.elapsed >= e.seconds) {
+            fpvlog::write("kamikaze: ending over after %.1f s, %s", g_ending.elapsed, kamikaze::then_name(e.then));
+            if (e.then == FPV_KAMIKAZE_THEN_RECALL) {
+                stop();  // as F7: back to Niko
+                return;
+            }
+            respawn();
+        }
+    }
+    if (signal_lost()) hide_game_text();  // only the static and SIGNAL LOST, like a real lost feed
 
     fpv_frame frame{};
     frame.struct_size = sizeof frame;
@@ -613,7 +637,7 @@ void tick() {
         g_osd_frame = frame;
         if (!g_ending.on) g_osd_visible = g_view == View::Fpv;
     }
-    if (!g_ending.on || g_ending.kind == kamikaze::Ending::SignalLost)
+    if (!g_ending.on || signal_lost())
         apply_camera(g_view == View::Fpv ? frame.camera : g_view == View::Chase ? frame.chase_camera : frame.los_camera,
                      g_view == View::Fpv);
 

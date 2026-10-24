@@ -13,7 +13,7 @@ void tick();
 
 bool active();
 
-// Ends the flight with Niko standing under the drone (F8 > Fly button, N key). Script thread only.
+// Ends the flight with Niko standing under the drone (F8 > Fly button, Y key). Script thread only.
 void move_niko_here();
 
 // The frame from the latest tick (struct_size 0 before the first one).
@@ -42,7 +42,9 @@ struct Tuning {
     bool osd_off = false;      // autotest flies with the OSD disable switch (AUX6) on
     bool bomb = false;          // autotest turns the bomb arm switch (AUX7) on in flight
     bool explode_switch = false;  // autotest fires the explode switch (AUX8) instead of hitting the target
-    int after_blast = -1;       // 0 signal lost, 1 cutscene; -1 = the player's F8 choice
+    int after_blast = -1;       // ending view: 0 signal lost, 1 cutscene; -1 = the player's (F8 > Kamikaze)
+    int ending_then = -1;       // fpv_kamikaze_ending_then; -1 = the player's
+    float ending_seconds = -1;  // ending view length; -1 = the player's
 };
 Tuning &tuning();
 

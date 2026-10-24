@@ -17,12 +17,16 @@ namespace fpvapi {
     X(fpv_overlay_set_action) X(fpv_overlay_poll_action) X(fpv_gps_set_home)
 
 // Only in libfpv builds with -DLIBFPV_KAMIKAZE=ON; null otherwise.
-#define FPV_KAMIKAZE_FUNCTIONS(X) X(fpv_kamikaze_poll_detonation) X(fpv_kamikaze_get_state)
+#define FPV_KAMIKAZE_FUNCTIONS(X) \
+    X(fpv_kamikaze_poll_detonation) X(fpv_kamikaze_get_state) X(fpv_kamikaze_get_config)
+// Newer kamikaze builds only (the player's ending choice); null otherwise.
+#define FPV_OPTIONAL_FUNCTIONS(X) X(fpv_kamikaze_set_ending_support)
 
 struct Api {
 #define FPV_FN(name) decltype(&::name) name = nullptr;
     FPV_FUNCTIONS(FPV_FN)
     FPV_KAMIKAZE_FUNCTIONS(FPV_FN)
+    FPV_OPTIONAL_FUNCTIONS(FPV_FN)
 #undef FPV_FN
 };
 

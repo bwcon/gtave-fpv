@@ -31,7 +31,9 @@ void on_fpv_log(void *, fpv_log_level level, const char *message) {
 
 bool loaded() { return g_loaded; }
 
-bool kamikaze() { return g_loaded && fpv.fpv_kamikaze_poll_detonation && fpv.fpv_kamikaze_get_state; }
+bool kamikaze() {
+    return g_loaded && fpv.fpv_kamikaze_poll_detonation && fpv.fpv_kamikaze_get_state && fpv.fpv_kamikaze_get_config;
+}
 
 bool load() {
     if (g_loaded) return true;
@@ -57,6 +59,7 @@ bool load() {
 #define FPV_FN(name) \
     fpv.name = reinterpret_cast<decltype(fpv.name)>(reinterpret_cast<void *>(GetProcAddress(lib, #name)));
     FPV_KAMIKAZE_FUNCTIONS(FPV_FN)
+    FPV_OPTIONAL_FUNCTIONS(FPV_FN)
 #undef FPV_FN
 
     std::string data_dir = game_dir() + "\\fpv-data";
