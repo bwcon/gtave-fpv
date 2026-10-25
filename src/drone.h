@@ -35,6 +35,19 @@ Status status();
 // third-person camera is on, or the pilot's OSD switch hides it. Any thread.
 bool osd_frame(fpv_frame *out);
 
+// Seconds since this flight's launch, for the goggles' recording timer. Any thread.
+double flight_seconds();
+
+// Values for GTAVE_FPV_Lens.fx. Any thread.
+struct LensState {
+    bool active = false;  // FPV view of a flying drone
+    float k1 = 0, k2 = 0, zoom = 1;
+    float fov_scale = 1;  // tan(wanted / 2) / tan(rendered / 2), > 1 when GTA's FOV cap bites
+    float noise = 0, breakup = 0;
+    bool digital = false;  // HD OSD mode: a digital link's look
+};
+LensState lens_state();
+
 // The game camera's Euler angles (degrees) for a view basis in game coords.
 void basis_to_euler(const float forward[3], const float up[3], const float right[3], float *pitch, float *roll,
                     float *heading);

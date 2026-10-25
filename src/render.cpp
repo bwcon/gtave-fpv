@@ -1,5 +1,7 @@
 #include "render.h"
 
+#include <atomic>
+
 #include "fpvapi.h"
 #include "log.h"
 
@@ -101,6 +103,14 @@ void release_device(api::device *device) {
 }
 
 void release_all() { destroy_all(true); }
+
+namespace {
+std::atomic<float> g_aspect{16.0f / 9.0f};
+}
+float aspect() { return g_aspect; }
+void set_aspect(float aspect) {
+    if (aspect > 0.1f) g_aspect = aspect;
+}
 
 ImVec2 msvc_vec2(ImVec2 (*fn)()) {
     ImVec2 out;

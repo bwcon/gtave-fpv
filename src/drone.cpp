@@ -13,6 +13,7 @@
 #include "log.h"
 #include "natives.h"
 #include "radio.h"
+#include "render.h"
 #include "shv.h"
 #include "world.h"
 
@@ -46,9 +47,12 @@ float g_near_clip = 0, g_fov = 0;  // last values sent to the game, for the trac
 std::mutex g_status_mutex;
 Status g_status;
 
-std::mutex g_osd_mutex;  // guards g_osd_frame / g_osd_visible for the render thread
+std::mutex g_osd_mutex;  // guards these for the render thread
 fpv_frame g_osd_frame{};
 bool g_osd_visible = false;
+double g_flight_seconds = 0;
+LensState g_lens;
+float g_fov_scale = 1;  // tan(wanted / 2) / tan(rendered / 2), for the lens effect
 
 // The visible quad: a game prop that follows libfpv's pose. No collision, so
 // the world probes never hit it.
@@ -192,10 +196,25 @@ void update_prop(const fpv_frame &frame, bool fpv_view) {
     shv::call(nat::SET_ENTITY_VISIBLE, g_prop, !fpv_view, false);
 }
 
-void publish_osd(const fpv_frame *frame, bool visible) {
+// Everything the render thread draws from: OSD, goggles HUD and lens effect.
+// frame null: no drone, all off.
+void publish_osd(const fpv_frame *frame, bool fpv_view) {
     std::lock_guard<std::mutex> lock(g_osd_mutex);
-    if (frame) g_osd_frame = *frame;
-    g_osd_visible = visible;
+    g_lens = LensState{};
+    g_osd_visible = false;
+    if (!frame) return;
+    g_osd_frame = *frame;
+    g_osd_visible = fpv_view && !(frame->flags & FPV_DRONE_OSD_DISABLED);
+    g_flight_seconds = frame->sim_time - g_first_sim_time;
+    const fpv_camera &c = frame->camera;
+    g_lens.active = fpv_view;
+    g_lens.k1 = c.distortion_k1;
+    g_lens.k2 = c.distortion_k2;
+    g_lens.zoom = c.distortion_zoom > 0 ? c.distortion_zoom : 1;
+    g_lens.fov_scale = g_fov_scale;
+    g_lens.noise = frame->video.noise;
+    g_lens.breakup = frame->video.breakup;
+    g_lens.digital = fpvapi::osd_style() == FPV_OSD_STYLE_HD;  // the HD OSD mode is the digital link
 }
 
 bool game_has_focus() {
@@ -264,13 +283,30 @@ float near_clip_for(const fpv_camera &c, float fov_y) {
     return n < kMinNearClip ? kMinNearClip : n > kNearClip ? kNearClip : n;
 }
 
-// ponytail: plain rectilinear FOV until the fisheye lens pass (Phase 3) exists.
+// libfpv widens the FOV for its fisheye so the top and bottom edges of the
+// distorted image show the FOV the player chose, but for the camera's
+// aspect_hint (4:3 analog). Redo it for the game window's real aspect.
+float lens_edge(const fpv_camera &c, float aspect) {
+    float r2 = 1 / (1 + aspect * aspect);  // squared radius of the top edge centre
+    float zoom = c.distortion_zoom > 0 ? c.distortion_zoom : 1;
+    return (1 + c.distortion_k1 * r2 + c.distortion_k2 * r2 * r2) / zoom;
+}
+float lens_fov(const fpv_camera &c) {
+    if ((c.distortion_k1 == 0 && c.distortion_k2 == 0) || c.aspect_hint <= 0) return c.fov_y_degrees;
+    float chosen = std::tan(c.fov_y_degrees * 0.5f / kRadToDeg) * lens_edge(c, c.aspect_hint);
+    return 2 * std::atan(chosen / lens_edge(c, render::aspect())) * kRadToDeg;
+}
+
 void apply_camera(const fpv_camera &c, bool fpv_view) {
     float pitch, roll, heading;
     basis_to_euler(c.forward, c.up, c.right, &pitch, &roll, &heading);
     shv::call(nat::SET_CAM_COORD, g_cam, c.position[0], c.position[1], c.position[2]);
     shv::call(nat::SET_CAM_ROT, g_cam, pitch, roll, heading, kRotationOrder);
-    float fov = c.fov_y_degrees > kMaxFov ? kMaxFov : c.fov_y_degrees;
+    // The lens effect expects the wider FOV; past GTA's cap it zooms the
+    // narrower image back out instead (the corners turn black).
+    float want = fpv_view ? lens_fov(c) : c.fov_y_degrees;
+    float fov = want > kMaxFov ? kMaxFov : want;
+    g_fov_scale = std::tan(want * 0.5f / kRadToDeg) / std::tan(fov * 0.5f / kRadToDeg);
     shv::call(nat::SET_CAM_FOV, g_cam, fov);
     float near_clip = fpv_view ? near_clip_for(c, fov) : kNearClip;
     shv::call(nat::SET_CAM_NEAR_CLIP, g_cam, near_clip);
@@ -377,6 +413,7 @@ void stop() {
     shv::call(nat::CLEAR_FOCUS);
     delete_prop();
     publish_osd(nullptr, false);
+    g_fov_scale = 1;
     hold_player(false);
     if (g_drone) {
         fpv.fpv_world_set_raycast_callback(nullptr, nullptr);
@@ -427,6 +464,16 @@ bool osd_frame(fpv_frame *out) {
     if (!g_osd_visible) return false;
     *out = g_osd_frame;
     return true;
+}
+
+double flight_seconds() {
+    std::lock_guard<std::mutex> lock(g_osd_mutex);
+    return g_flight_seconds;
+}
+
+LensState lens_state() {
+    std::lock_guard<std::mutex> lock(g_osd_mutex);
+    return g_lens;
 }
 
 // The player faces the drone's heading.
@@ -525,7 +572,7 @@ void tick() {
     const bool fpv_view = g_view == View::Fpv;
     apply_camera(fpv_view ? frame.camera : g_view == View::Chase ? frame.chase_camera : frame.los_camera, fpv_view);
     update_prop(frame, fpv_view);
-    publish_osd(&frame, fpv_view && !(frame.flags & FPV_DRONE_OSD_DISABLED));
+    publish_osd(&frame, fpv_view);
     publish_status(true);
 
     for (uint32_t i = 0; i < frame.impact_count && i < FPV_MAX_IMPACTS; ++i) {

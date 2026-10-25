@@ -84,7 +84,8 @@ rates, OSD layout), so that no settings live in a second interface.
 2. DJI goggles HUD: signal bars, bitrate, latency, recording dot and timer.
 3. Video look for each mode: analog noise and breakup, or digital freeze and
    pixelation.
-4. Turn off DLSS frame generation while flying, because it adds latency.
+4. DLSS frame generation adds input latency. No script native switches it, so
+   for FPV, turn it off in the game's graphics settings.
 5. A real FPV quad model instead of a DJI-style game prop. The code is done:
    `[Drone] Model=` in `GTAVE.FPV.ini` takes any prop name. The work is the
    asset: a 5-inch quad model, made in Blender or taken from a free licensed

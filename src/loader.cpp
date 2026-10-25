@@ -26,6 +26,7 @@ const char *const kLiveCopy = "GTAVE.FPV.core.live.dll";
 using CoreFn = void (*)();
 using CoreTabFn = void (*)(reshade::api::effect_runtime *, const imgui_function_table *);
 using CoreDeviceFn = void (*)(reshade::api::device *);
+using CoreRuntimeFn = void (*)(reshade::api::effect_runtime *);
 
 HMODULE g_module = nullptr;
 HMODULE g_core = nullptr;
@@ -34,6 +35,8 @@ CoreFn g_core_unload = nullptr;
 CoreTabFn g_core_tab = nullptr;
 CoreTabFn g_core_overlay = nullptr;
 CoreDeviceFn g_core_release_device = nullptr;
+CoreRuntimeFn g_core_begin_effects = nullptr;
+CoreRuntimeFn g_core_reloaded_effects = nullptr;
 FILETIME g_core_time{};
 bool g_addon = false;
 
@@ -57,6 +60,20 @@ void on_overlay(reshade::api::effect_runtime *runtime) {
     ReleaseSRWLockShared(&g_core_lock);
 }
 
+// Before ReShade runs its effects: the lens effect's uniforms.
+void on_begin_effects(reshade::api::effect_runtime *runtime, reshade::api::command_list *,
+                      reshade::api::resource_view, reshade::api::resource_view) {
+    AcquireSRWLockShared(&g_core_lock);
+    if (g_core_begin_effects) g_core_begin_effects(runtime);
+    ReleaseSRWLockShared(&g_core_lock);
+}
+
+void on_reloaded_effects(reshade::api::effect_runtime *runtime) {
+    AcquireSRWLockShared(&g_core_lock);
+    if (g_core_reloaded_effects) g_core_reloaded_effects(runtime);
+    ReleaseSRWLockShared(&g_core_lock);
+}
+
 // The game recreates its D3D12 device during startup: the core's textures
 // must go before the device they were made on.
 void on_destroy_device(reshade::api::device *device) {
@@ -72,6 +89,8 @@ void try_register_addon() {
     reshade::register_overlay("GTAVE.FPV", &on_tab);
     reshade::register_event<reshade::addon_event::destroy_device>(&on_destroy_device);
     reshade::register_event<reshade::addon_event::reshade_overlay>(&on_overlay);
+    reshade::register_event<reshade::addon_event::reshade_begin_effects>(&on_begin_effects);
+    reshade::register_event<reshade::addon_event::reshade_reloaded_effects>(&on_reloaded_effects);
     g_addon = true;
     fpvlog::write("loader: registered with ReShade as an add-on (API %d)", RESHADE_API_VERSION);
 }
@@ -94,6 +113,7 @@ void unload_core() {
     g_core_tab = nullptr;
     g_core_overlay = nullptr;
     g_core_release_device = nullptr;
+    g_core_begin_effects = g_core_reloaded_effects = nullptr;
     ReleaseSRWLockExclusive(&g_core_lock);
 }
 
@@ -116,6 +136,8 @@ void load_core() {
     g_core_tab = reinterpret_cast<CoreTabFn>(get("gtave_fpv_core_tab"));
     g_core_overlay = reinterpret_cast<CoreTabFn>(get("gtave_fpv_core_overlay"));
     g_core_release_device = reinterpret_cast<CoreDeviceFn>(get("gtave_fpv_core_release_device"));
+    g_core_begin_effects = reinterpret_cast<CoreRuntimeFn>(get("gtave_fpv_core_begin_effects"));
+    g_core_reloaded_effects = reinterpret_cast<CoreRuntimeFn>(get("gtave_fpv_core_reloaded_effects"));
     ReleaseSRWLockExclusive(&g_core_lock);
     fpvlog::write("loader: core loaded (tick %p)", reinterpret_cast<void *>(g_core_tick));
 }
@@ -151,6 +173,8 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID reserved) {
             reshade::unregister_overlay("GTAVE.FPV", &on_tab);
             reshade::unregister_event<reshade::addon_event::destroy_device>(&on_destroy_device);
             reshade::unregister_event<reshade::addon_event::reshade_overlay>(&on_overlay);
+            reshade::unregister_event<reshade::addon_event::reshade_begin_effects>(&on_begin_effects);
+            reshade::unregister_event<reshade::addon_event::reshade_reloaded_effects>(&on_reloaded_effects);
             reshade::unregister_addon(module);
         }
         shv::unregister_script(module);

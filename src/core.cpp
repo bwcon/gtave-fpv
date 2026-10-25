@@ -2,6 +2,7 @@
 // the GTAVE.FPV.asi loader calls it every script tick and every ReShade frame,
 // and hot-reloads it when a new build is deployed.
 #include "drone.h"
+#include "lens.h"
 #include "log.h"
 #include "osd.h"
 #include "render.h"
@@ -47,6 +48,12 @@ extern "C" __declspec(dllexport) void gtave_fpv_core_overlay(reshade::api::effec
                                                              const imgui_function_table *table) {
     imgui_function_table_instance() = table;
     osd::draw(runtime);
+}
+extern "C" __declspec(dllexport) void gtave_fpv_core_begin_effects(reshade::api::effect_runtime *runtime) {
+    lens::begin_effects(runtime);
+}
+extern "C" __declspec(dllexport) void gtave_fpv_core_reloaded_effects(reshade::api::effect_runtime *runtime) {
+    lens::forget(runtime);
 }
 extern "C" __declspec(dllexport) void gtave_fpv_core_release_device(reshade::api::device *device) {
     render::release_device(device);

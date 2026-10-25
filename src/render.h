@@ -27,4 +27,8 @@ void release_all();
 // float or references are fine.
 ImVec2 msvc_vec2(ImVec2 (*fn)());
 
+// The game window's width / height, from the last ReShade frame (16:9 before). Any thread.
+float aspect();
+void set_aspect(float aspect);
+
 }  // namespace render
