@@ -52,7 +52,6 @@ fpv_frame g_osd_frame{};
 bool g_osd_visible = false;
 double g_flight_seconds = 0;
 LensState g_lens;
-float g_fov_scale = 1;  // tan(wanted / 2) / tan(rendered / 2), for the lens effect
 
 // The visible quad: a game prop that follows libfpv's pose. No collision, so
 // the world probes never hit it.
@@ -106,6 +105,10 @@ DroneSettings read_settings() {
     s.target_size = float(std::atof(value("TargetSize", "0.30").c_str()));
     return s;
 }
+
+// [View] Bezel: the goggles bezel around the FPV picture (G toggles it).
+bool read_bezel() { return GetPrivateProfileIntA("View", "Bezel", 1, ini_path().c_str()) != 0; }
+void save_bezel(bool on) { WritePrivateProfileStringA("View", "Bezel", on ? "1" : "0", ini_path().c_str()); }
 
 // Largest horizontal extent of a model, metres.
 float model_span(uint32_t hash) {
@@ -210,8 +213,6 @@ void publish_osd(const fpv_frame *frame, bool fpv_view) {
     g_lens.active = fpv_view;
     g_lens.k1 = c.distortion_k1;
     g_lens.k2 = c.distortion_k2;
-    g_lens.zoom = c.distortion_zoom > 0 ? c.distortion_zoom : 1;
-    g_lens.fov_scale = g_fov_scale;
     g_lens.noise = frame->video.noise;
     g_lens.breakup = frame->video.breakup;
     g_lens.digital = fpvapi::osd_style() == FPV_OSD_STYLE_HD;  // the HD OSD mode is the digital link
@@ -294,7 +295,8 @@ float lens_edge(const fpv_camera &c, float aspect) {
 float lens_fov(const fpv_camera &c) {
     if ((c.distortion_k1 == 0 && c.distortion_k2 == 0) || c.aspect_hint <= 0) return c.fov_y_degrees;
     float chosen = std::tan(c.fov_y_degrees * 0.5f / kRadToDeg) * lens_edge(c, c.aspect_hint);
-    return 2 * std::atan(chosen / lens_edge(c, render::aspect())) * kRadToDeg;
+    bool hd = fpvapi::osd_style() == FPV_OSD_STYLE_HD;
+    return 2 * std::atan(chosen / lens_edge(c, render::picture_aspect(hd))) * kRadToDeg;
 }
 
 void apply_camera(const fpv_camera &c, bool fpv_view) {
@@ -302,11 +304,10 @@ void apply_camera(const fpv_camera &c, bool fpv_view) {
     basis_to_euler(c.forward, c.up, c.right, &pitch, &roll, &heading);
     shv::call(nat::SET_CAM_COORD, g_cam, c.position[0], c.position[1], c.position[2]);
     shv::call(nat::SET_CAM_ROT, g_cam, pitch, roll, heading, kRotationOrder);
-    // The lens effect expects the wider FOV; past GTA's cap it zooms the
-    // narrower image back out instead (the corners turn black).
+    // The lens effect bends a wider image; past GTA's cap the picture just
+    // shows a little less (the effect keeps its corners on the frame).
     float want = fpv_view ? lens_fov(c) : c.fov_y_degrees;
     float fov = want > kMaxFov ? kMaxFov : want;
-    g_fov_scale = std::tan(want * 0.5f / kRadToDeg) / std::tan(fov * 0.5f / kRadToDeg);
     shv::call(nat::SET_CAM_FOV, g_cam, fov);
     float near_clip = fpv_view ? near_clip_for(c, fov) : kNearClip;
     shv::call(nat::SET_CAM_NEAR_CLIP, g_cam, near_clip);
@@ -382,6 +383,8 @@ void start() {
     spawn_prop(g_spawn_pos);
 
     hold_player(true);
+    render::set_bezel(read_bezel());
+    save_bezel(render::bezel());  // writes the key on first use, so the ini documents it
     g_cam = shv::call<int>(nat::CREATE_CAM, "DEFAULT_SCRIPTED_CAMERA", false);
     shv::call(nat::SET_CAM_ACTIVE, g_cam, true);
     shv::call(nat::RENDER_SCRIPT_CAMS, true, false, 0, true, false, 0);
@@ -413,7 +416,6 @@ void stop() {
     shv::call(nat::CLEAR_FOCUS);
     delete_prop();
     publish_osd(nullptr, false);
-    g_fov_scale = 1;
     hold_player(false);
     if (g_drone) {
         fpv.fpv_world_set_raycast_callback(nullptr, nullptr);
@@ -540,6 +542,10 @@ void tick() {
         if (key_pressed('C')) g_view = View((int(g_view) + 1) % int(View::Count));
         if (key_pressed('R')) respawn();
         if (key_pressed('O')) fpvapi::toggle_osd_style();
+        if (key_pressed('G')) {
+            render::set_bezel(!render::bezel());
+            save_bezel(render::bezel());
+        }
         if (key_pressed('Y')) {
             move_player_here();
             return;

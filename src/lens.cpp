@@ -3,6 +3,7 @@
 #include <cstring>
 
 #include "drone.h"
+#include "fpvapi.h"
 #include "log.h"
 
 namespace lens {
@@ -12,9 +13,9 @@ namespace api = reshade::api;
 
 constexpr const char *kEffect = "GTAVE_FPV_Lens.fx";
 
-enum Var { Active, LensK1, LensK2, LensZoom, FovScale, Noise, Breakup, Digital, VarCount };
-const char *const kNames[VarCount] = {"Active",   "LensK1", "LensK2",  "LensZoom",
-                                      "FovScale", "Noise",  "Breakup", "Digital"};
+enum Var { Active, LensK1, LensK2, Noise, Breakup, Digital, RectMin, RectMax, Bezel, VarCount };
+const char *const kNames[VarCount] = {"Active",  "LensK1",  "LensK2",  "Noise", "Breakup",
+                                      "Digital", "RectMin", "RectMax", "Bezel"};
 
 // Uniform handles come from enumerate_uniform_variables, not find_uniform_variable:
 // that one returns a handle struct by value, which MSVC (ReShade) and MinGW
@@ -42,8 +43,9 @@ void find(api::effect_runtime *runtime) {
     }
 }
 
-void set(api::effect_runtime *rt, Var v, float value) {
-    if (g_vars[v].handle) rt->set_uniform_value_float(g_vars[v], &value, 1, 0);
+void set(api::effect_runtime *rt, Var v, float x, float y = 0, size_t count = 1) {
+    const float values[2] = {x, y};
+    if (g_vars[v].handle) rt->set_uniform_value_float(g_vars[v], values, count, 0);
 }
 
 }  // namespace
@@ -56,11 +58,16 @@ void begin_effects(api::effect_runtime *runtime) {
     if (!s.active) return;
     set(runtime, LensK1, s.k1);
     set(runtime, LensK2, s.k2);
-    set(runtime, LensZoom, s.zoom);
-    set(runtime, FovScale, s.fov_scale);
     set(runtime, Noise, s.noise);
     set(runtime, Breakup, s.breakup);
     set(runtime, Digital, s.digital ? 1.0f : 0.0f);
+
+    // The picture rectangle, as fractions of the window.
+    const render::Rect r = render::picture_rect(s.digital);
+    const render::Rect screen = render::picture_rect_of_window();
+    set(runtime, RectMin, r.x0 / screen.w(), r.y0 / screen.h(), 2);
+    set(runtime, RectMax, r.x1 / screen.w(), r.y1 / screen.h(), 2);
+    set(runtime, Bezel, render::bezel() ? 1.0f : 0.0f);
 }
 
 void forget(api::effect_runtime *runtime) {

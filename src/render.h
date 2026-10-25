@@ -27,8 +27,22 @@ void release_all();
 // float or references are fine.
 ImVec2 msvc_vec2(ImVec2 (*fn)());
 
-// The game window's width / height, from the last ReShade frame (16:9 before). Any thread.
-float aspect();
-void set_aspect(float aspect);
+// The game window's size, from the last ReShade frame. Any thread.
+void set_screen(float width, float height);
+
+// Goggles bezel on or off (G key). Any thread.
+void set_bezel(bool on);
+bool bezel();
+
+// Where the FPV picture goes, in window pixels: the goggles' screen (16:9 for
+// HD, 4:3 for analog) when the bezel is on, the whole window otherwise.
+struct Rect {
+    float x0, y0, x1, y1;
+    float w() const { return x1 - x0; }
+    float h() const { return y1 - y0; }
+};
+Rect picture_rect(bool hd);
+Rect picture_rect_of_window();  // the whole window
+float picture_aspect(bool hd);  // width / height of picture_rect
 
 }  // namespace render

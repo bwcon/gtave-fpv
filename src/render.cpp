@@ -105,11 +105,32 @@ void release_device(api::device *device) {
 void release_all() { destroy_all(true); }
 
 namespace {
-std::atomic<float> g_aspect{16.0f / 9.0f};
+std::atomic<float> g_screen_w{1920}, g_screen_h{1080};
+std::atomic<bool> g_bezel{false};
+}  // namespace
+
+void set_screen(float width, float height) {
+    if (width < 1 || height < 1) return;
+    g_screen_w = width;
+    g_screen_h = height;
 }
-float aspect() { return g_aspect; }
-void set_aspect(float aspect) {
-    if (aspect > 0.1f) g_aspect = aspect;
+void set_bezel(bool on) { g_bezel = on; }
+bool bezel() { return g_bezel; }
+
+Rect picture_rect(bool hd) {
+    const float w = g_screen_w, h = g_screen_h;
+    if (!g_bezel) return {0, 0, w, h};
+    const float aspect = hd ? 16.0f / 9.0f : 4.0f / 3.0f;
+    float ph = h * 0.86f, pw = ph * aspect;  // goggles: the screen fills most of the view
+    if (pw > w * 0.94f) pw = w * 0.94f, ph = pw / aspect;
+    return {(w - pw) * 0.5f, (h - ph) * 0.5f, (w + pw) * 0.5f, (h + ph) * 0.5f};
+}
+
+Rect picture_rect_of_window() { return {0, 0, g_screen_w, g_screen_h}; }
+
+float picture_aspect(bool hd) {
+    Rect r = picture_rect(hd);
+    return r.w() / r.h();
 }
 
 ImVec2 msvc_vec2(ImVec2 (*fn)()) {
