@@ -1,195 +1,189 @@
-# GTA V Enhanced FPV (work in progress)
+# GTA V Enhanced FPV
 
-This fork ports gtaiv-fpv to GTA V Enhanced. Nothing works in GTA V yet. See
-[ROADMAP.md](ROADMAP.md) for the plan. The text below describes the GTA IV
-original.
+![The FPV view](docs/fpv-view.jpg)
 
-# GTA IV FPV
+Fly an FPV drone through Los Santos with your own radio. Press F9 and a quad
+launches from the street in front of you. The drone runs on
+[libfpv](https://github.com/hammerill/libfpv), which embeds real Betaflight
+firmware. Rates, angle mode, air mode, arming and turtle mode work as they do
+on a real quad.
 
-![GTA IV FPV GIF](gtaiv-fpv.gif)
-
-Fly an FPV drone through Liberty City with your own radio. Press F7 and Niko
-launches a quad from the street in front of him. It is simulated by 
-[libfpv](https://github.com/hammerill/libfpv), which
-runs real Betaflight firmware, so rates, angle mode, air mode, arming and
-turtle mode behave as they do on a real quad.
+This mod is a port of [gtaiv-fpv](https://github.com/hammerill/gtaiv-fpv) by
+hammerill from GTA IV to GTA V Enhanced. It uses a fork of libfpv,
+[bwcon/libfpv](https://github.com/bwcon/libfpv), which adds Betaflight
+2026.6, the HD OSD canvas and goggle fonts. It is an early release. See
+[ROADMAP.md](ROADMAP.md) for the plan and the open items.
 
 ## Features
 
-- **Real Betaflight** in the loop, with your rates, modes and tuning. Set up
-  your radio once in the F8 overlay's wizard. Betaflight Configurator can
-  connect too.
-- **Three cameras**: FPV (the goggles view, with a fisheye lens), chase and
-  line of sight from where Niko stands.
-- **Betaflight OSD** in the FPV view: battery, cell voltage, current, flight
-  timer and mode. The GPS elements work too (speed, altitude, vario, distance
-  flown, home arrow and distance); turn them on in Configurator's OSD tab.
-  Home is Niko, so the arrow always points back to him.
-- **Collides with the world**: buildings, the road, cars, peds and props, all
-  through the engine's own physics probe. Crashes break props and burn
-  motors.
-- **Crash effects**: a fast hit knocks a ped over (ragdoll and damage), dents
-  a car or shoves a prop.
-- **Motor sound** from libfpv's synthesizer.
-- **Clean view**: the minimap and HUD are hidden while you fly. Put
-  Betaflight's OSD disable on a switch (the radio wizard asks for one) to
-  hide the OSD, help boxes and subtitles too, for recording. Subtitles that
-  appear while the switch is on are skipped. Mission markers and other
-  things drawn in the world stay.
-- **Move Niko here**: ends the flight with Niko standing where the drone is,
-  facing the way it faced.
-- **Kamikaze** (only with a kamikaze build of libfpv, see below): the drone
-  carries a warhead. A detonation sets off a grenade-sized GTA explosion
-  where it happened. Then either the goggles show static with "SIGNAL LOST"
-  (the game's HUD and text hidden), or an outside camera shows the blast
-  ("Cutscene"), for 3 seconds by default. After that a new drone waits at
-  the launch spot (respawn), the flight ends and you control Niko again
-  (recall), or the view stays until you act (nothing). Pick all three in
-  libfpv's F8 > Kamikaze tab. During the view, R (respawn), F7 (back to
-  Niko) and Y (Move Niko here) work at once.
-
-## Kamikaze
-
-Build libfpv with `-DLIBFPV_KAMIKAZE=ON` and put that `libfpv.dll` in
-`GTAIV/`. The mod finds the warhead functions at runtime, so the same
-`GTAIV.FPV.core.dll` works with both builds. With a normal libfpv the kamikaze
-parts are switched off. The log says which build is loaded: "kamikaze build"
-or "no warhead". The release ZIP ships the normal build.
-
-The rules are libfpv's. Arm the motors with the bomb switch (AUX7) off. Take
-off and flip the switch, and after the arming delay (OSD `ARMING 3`, then
-`STEADY`) the warhead is live. Once it is live, any touch sets it off, and so
-does the explode switch (AUX8). Without a radio, K toggles the bomb switch
-and X held is the explode switch. On a gamepad, X/Square toggles the bomb
-switch and the right shoulder button is the explode switch. Payload, arming
-delay, fuse sensitivity and the ending are in F8 > Kamikaze, saved by libfpv
-in `GTAIV/fpv-data/settings.json`. The ending timer runs on game time, so it
-waits while the pause menu is open.
+- Real Betaflight in the loop, with your rates, modes and tuning. Set up your
+  radio once in the setup wizard. Betaflight Configurator can connect too.
+- Three cameras: FPV (the goggles view), chase, and line of sight from where
+  the player stands.
+- Betaflight OSD in two styles: the analog 30x16 canvas, or the DJI-style HD
+  53x20 canvas. The HD style adds a goggles HUD with signal bars, bitrate,
+  latency and a recording dot.
+- Goggle fonts: copy the font folders from your goggles' SD card (DJI O3 PNG
+  sheets or WTFOS `.bin` fonts) and pick one in the OSD settings.
+- Goggles view: a fisheye lens, a goggles bezel around the picture, and a
+  video look for each style. Analog has noise, tearing and breakup. Digital
+  has block artifacts and freezes. The lens shader runs only in the FPV view.
+- Collision with the world: buildings, the road, cars, peds and props, through
+  the game's shape test probes.
+- Motor sound from the libfpv synthesizer.
+- The in-game radio plays while you fly. Change the station with `,` and `.`.
+- FPV DVR: NVIDIA ShadowPlay records while the drone is armed, and stops 2
+  seconds after you disarm.
+- Move the player here: ends the flight with the player standing where the
+  drone is.
 
 ## Controls
 
 | Key | Action |
 |---|---|
-| F7 | Launch the drone / return to Niko |
-| F8 | Settings overlay (radio setup, rates, OSD, camera, fisheye strength) |
+| F9 | Launch the drone, or return to the player |
 | C | Cycle cameras: FPV, chase, line of sight |
 | R | Respawn the drone at its launch point, repaired |
-| Y | Move Niko here (also a button in F8 > Fly) |
+| Y | Move the player to the drone |
+| O | Switch the OSD style: analog or HD |
+| G | Show or hide the goggles bezel |
+| `,` and `.` | Previous or next radio station |
 
-Without a radio, the keyboard works as a fallback. Enter arms, W/S is
-throttle, A/D is yaw, and the arrow keys are pitch and roll. A gamepad works
-too.
+All libfpv settings (radio setup, rates, OSD layout, fonts, camera and quad)
+are in the ReShade overlay. Press Home, open the Add-ons page, and open the
+GTAVE.FPV tab.
 
-Fisheye strength and FOV are in F8 > Camera & sound. A strength of 0 turns
-the lens off.
+Without a radio, the keyboard works as a fallback. Enter arms, W and S are
+throttle, A and D are yaw, and the arrow keys are pitch and roll. A gamepad
+works too.
 
 ## Requirements
 
-- GTA IV: The Complete Edition, version 1.2.0.59 (Steam). This is the only
-  version that has been tested.
-- [FusionFix](https://github.com/ThirteenAG/GTAIV.EFLC.FusionFix) (its ASI
-  loader, `dinput8.dll`).
-- Aru's C++ ScriptHook (`ScriptHook.dll`), for example from Tomasak's .NET
-  ScriptHook pack.
-- Windows 10 or 11. The game is 32-bit, so libfpv must be built for i686.
+- GTA V Enhanced (the 2025 PC edition), story mode only.
+- [ScriptHookV](http://www.dev-c.com/gtav/scripthookv/) with GTA V Enhanced
+  support, and its ASI loader (`dinput8.dll`).
+- [ReShade](https://reshade.me) 6.x with full add-on support (the "with full
+  add-on support" installer), installed for GTA V Enhanced with DirectX 12.
+- Windows 10 or 11.
+- Optional: an FPV radio in USB joystick mode, and the NVIDIA app for the DVR.
+
+Turn off DLSS frame generation for FPV flying. Frame generation adds input
+latency, and no script function can switch it off.
 
 ## Installing
 
-**Players: follow the [install guide on the latest release](https://github.com/hammerill/gtaiv-fpv/releases/latest).**
-It links everything you need and takes about five minutes.
+Copy these files into the game folder, next to `GTA5_Enhanced.exe`:
 
-Every push to `main` builds a new release (`.github/workflows/release.yml`)
-with the latest libfpv, so `gtaiv-fpv.zip` is always current. The release
-text comes from `docs/INSTALL.md`. To rebuild with a newer libfpv without a
-mod change, run the Release workflow by hand from the Actions tab.
-
-The ZIP holds these files, which go into the `GTAIV/` folder next to
-`GTAIV.exe`:
-
-| File | What it is |
+| File | Where it goes |
 |---|---|
-| `GTAIV.FPV.asi` | Loader that the ASI loader picks up |
-| `GTAIV.FPV.core.dll` | The mod itself (hot-reloaded by the loader) |
-| `libfpv.dll` | libfpv, i686 build |
-| `libfpv.LICENSE.txt` | libfpv's license (GPL-3.0-or-later) |
+| `GTAVE.FPV.asi` | The game folder. The ASI loader loads it. |
+| `GTAVE.FPV.core.dll` | The game folder. This is the mod itself. |
+| `libfpv.dll` | The game folder. This is the drone simulator. |
+| `GTAVE_FPV_Lens.fx` | `reshade-shaders\Shaders` |
+| `GTAVE_FPV_Bezel.png` | `reshade-shaders\Textures` |
 
-Settings, radio mappings and Betaflight EEPROMs go in `GTAIV/fpv-data/`. The
-log is `GTAIV/GTAIV.FPV.log`.
+Then do these steps:
+
+1. Start the game and load story mode.
+2. Press Home to open ReShade, and turn on the `GTAVE_FPV_Lens` effect. The mod
+   switches it on and off by itself after that.
+3. Press F9 to launch the drone.
+4. Open the GTAVE.FPV tab in ReShade and follow the radio setup wizard once.
+
+If ReShade has "Load only enabled effects" set, the lens shader loads a few
+frames after you first enter the FPV view. This is normal.
+
+### Goggle fonts
+
+1. Make the folder `%APPDATA%\libfpv\fonts`.
+2. Copy each font package into it as its own folder, with the files unchanged.
+   For example, `fonts\SNEAKY_FPV_O3_CLASH_BTFL\BTFL_CLASH_O3.png`.
+3. In the GTAVE.FPV tab, open the OSD page and pick the font in the Font list.
+
+The mod uses these files:
+
+- DJI O3 fonts: `*_O3.png` or `*_HD.png` for the HD style, and `*_SD.png` for
+  the analog style. Use the Betaflight (BTFL) variants.
+- WTFOS (msp-osd) fonts: `font_bf_hd.bin` for the HD style, and `font_bf.bin`
+  for the analog style.
+
+### Files the mod writes
+
+- `%APPDATA%\libfpv`: libfpv settings, radio mappings and Betaflight
+  settings. The standalone libfpv app and other libfpv games share this
+  folder.
+- `GTAVE.FPV.ini` in the game folder: the drone model, the bezel and the DVR
+  mode. Set `[DVR] Mode=off` to turn off the ShadowPlay recording.
+- `GTAVE.FPV.log` in the game folder: the mod log.
+
+## Tune it in Betaflight Configurator
+
+The drone runs real Betaflight. You can set PIDs, filters, rates, modes and
+the OSD layout in [Betaflight Configurator](https://app.betaflight.com).
+
+1. In the game, launch the drone with F9.
+2. In Configurator, open Options and turn on manual connection mode.
+3. Select Manual Selection, enter `ws://localhost:5761` as the port, and
+   connect.
+
+For the HD OSD layout, set the video format to HD in the OSD tab. You can
+place elements across all 53 columns.
+
+## FPV DVR
+
+If `[DVR] Mode=shadowplay` (the default), the mod presses Alt+F9 when you arm
+and again 2 seconds after you disarm. Alt+F9 starts and stops a manual
+recording in the NVIDIA app. Make sure that the NVIDIA app overlay is on and
+that Alt+F9 is its record shortcut. The clips go to the NVIDIA app's video
+folder. GTA's own Rockstar Editor cannot record the mod's camera.
 
 ## Building
 
-The build needs CMake 3.24 or newer and the i686 MinGW-w64 toolchain
-(`i686-w64-mingw32-g++-posix`). It cross-compiles from Linux or WSL.
+The build uses an MSYS2 MINGW64 shell (x86_64 MinGW-w64 GCC, CMake and
+Ninja).
 
 ```sh
-# libfpv, 32-bit (from the libfpv checkout); add -DLIBFPV_KAMIKAZE=ON for the warhead
-cmake -S . -B build/win32 -DCMAKE_TOOLCHAIN_FILE=cmake/toolchains/mingw-w64-i686.cmake
-cmake --build build/win32 -j
+# libfpv (from the bwcon/libfpv checkout next to this one)
+cmake -S . -B build/win -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-fpermissive
+cmake --build build/win
 
 # this mod
-cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=cmake/mingw-w64-i686.cmake
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DGTAVE_DIR="C:/path/to/GTA V Enhanced"
 cmake --build build
-./deploy.sh   # copies the asi, the core and libfpv.dll into ../GTAIV
-# or with a kamikaze libfpv built in build/win32-kamikaze:
-LIBFPV_DLL=~/Projects/libfpv/build/win32-kamikaze/libfpv.dll ./deploy.sh
+cmake --build build --target deploy
 ```
 
-`LIBFPV_DIR` (default `~/Projects/libfpv`) and `LIBFPV_BUILD` point the
-build at libfpv. Only the header is used at build time, because the core
-loads `libfpv.dll` at runtime.
-
-If you run `./deploy.sh` while the game is running, the new core reloads
-within about a second. The `.asi` and `libfpv.dll` stay locked until the
-game exits.
+The `deploy` target copies the mod, `libfpv.dll`, the shader and the bezel
+into the game folder. If the game is running, the core DLL reloads within
+about a second. The `.asi` and `libfpv.dll` stay locked until the game exits.
 
 ## How it works
 
-- **ScriptHook from MinGW.** `ScriptHook.dll` exports only MSVC C++ symbols.
-  `src/scripthook.cpp` finds them by their mangled names and builds the
-  `ScriptThread` vtable by hand. Natives are called by joaat hash.
-- **Loader and core.** The `.asi` owns the script thread, the log and the
-  D3D hook. It forwards every tick and frame to the core DLL, and swaps in a
-  new core when the file changes.
-- **Camera.** A scripted camera follows libfpv's camera. The rotation is
-  converted to the game's Euler order (heading, then roll, then pitch). A
-  near plane is chosen from frustum probes so that the road stays visible
-  under a low lens.
-- **World collision.** libfpv's raycast callback goes to the engine's physics
-  probe (found by reverse engineering 1.2.0.59). A hit is mapped back to its
-  ped, vehicle or object through the entity pools.
-- **Drawing.** ScriptHook's D3D9 hook calls `src/render.cpp` after the game
-  finishes a frame. For the fisheye, the back buffer is copied to a texture
-  and drawn back through a 64x36 grid warped with libfpv's Brown-Conrady
-  parameters, so no shader compiler is needed. The FOV is widened for the
-  real screen aspect so that the edges still show the FOV you chose. The OSD
-  and the overlay are drawn on top as textured triangles.
-- **Audio.** A waveOut thread plays `fpv_audio_read`.
+- ScriptHookV from MinGW: the mod finds the ScriptHookV exports by their
+  mangled names. Natives are called by hash on the script thread.
+- Loader and core: the `.asi` owns the script, the log and the ReShade
+  add-on registration. It forwards every tick and frame to the core DLL. When
+  the core file changes, the loader swaps in the new core.
+- Camera: a scripted camera follows the libfpv camera. The focus position
+  follows the drone, so the map and collision stream around it.
+- World collision: the libfpv raycast callback goes to synchronous shape test
+  probes. A hit is mapped back to its ped, vehicle or object.
+- Drawing: the OSD and the libfpv overlay are ImGui draw lists in the ReShade
+  overlay. The lens, bezel and video look are one ReShade effect,
+  `GTAVE_FPV_Lens.fx`. The mod sets its values every frame.
 
 `MODLOG.md` is the development journal. It records addresses, decisions and
-what was verified in game.
-
-## Testing without hands
-
-`GTAIV/fpv-data/autotest.txt` turns on a scripted test. It moves Niko to a
-road, launches the drone and flies a fixed stick sequence, logging
-everything. Knobs: `car`/`ped` (crash target), `hover`, `still`, `cam`
-(camera-axis test), `niko` (end with Move Niko here), `secs=`, `fov=`,
-`near=`, `osd=`, `osdoff` (fly with the OSD disable switch on), and with a
-kamikaze libfpv `boom` (arm the warhead in flight and hit the target),
-`boomsw` (air burst with the explode switch), and to force an ending
-`signal`/`cutscene` (the view), `respawn`/`recall`/`hold` (what follows) and
-`dur=<s>` (its length). **Delete the file afterwards.** Otherwise every game start
-runs the test.
-
-Creating `GTAIV/fpv-data/shot.txt` saves the next finished frame, with the
-mod's own drawing, to `GTAIV/fpv-data/shots/<time>.bmp`. This works when
-window capture can't see the game.
+what was tested in the game.
 
 ## Credits
 
-- [libfpv](https://github.com/hammerill/libfpv): the drone, Betaflight
-  (through SimITL), OSD, overlay and sound.
-- Aru: the GTA IV C++ ScriptHook. ThirteenAG: FusionFix and the ASI loader.
+- [hammerill](https://github.com/hammerill): libfpv and gtaiv-fpv, which this
+  mod is built on.
+- [Betaflight](https://github.com/betaflight/betaflight) and SimITL: the
+  flight controller firmware and its simulator target.
+- Alexander Blade: ScriptHookV. crosire: ReShade.
+- [stb_image](https://github.com/nothings/stb) by Sean Barrett: the PNG font
+  loader.
 - Written with Claude (Anthropic).
 
 ## License

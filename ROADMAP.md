@@ -123,6 +123,12 @@ rates, OSD layout), so that no settings live in a second interface.
 The libfpv OSD grid is fixed at 16x30, the analog PAL canvas. DJI O3 and O4
 with Betaflight use MSP DisplayPort on a 53x20 HD canvas.
 
+Status on 2026-10-25: items 1 to 3 are done in bwcon/libfpv (commits 703f7b8
+and a2d0757). All ten of Ben's font packages load. The in-game test is open.
+Not done: the `_2` files (glyphs 256 to 511) and the O3 color columns for
+Betaflight's warning severities, which need the attribute byte in the fake
+display.
+
 1. In bwcon/libfpv, make the OSD grid size follow the Betaflight video system.
 2. Turn on the HD canvas (`vcd_video_system = HD`) in the embedded Betaflight
    build.
