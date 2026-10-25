@@ -120,7 +120,7 @@ so the game data goes into the Betaflight OSD.
 1. Area name: `GET_NAME_OF_ZONE` gives the zone code, and `GET_LABEL_TEXT`
    gives its display name ("Vinewood Hills", "Mount Chiliad"). Show it in a
    Betaflight "Custom message" OSD element. libfpv already writes Custom
-   message 1 for kamikaze builds; the fork exposes this as an API.
+   message 1 for kamikaze builds. The fork exposes this as an API.
 2. Real-looking GPS: libfpv places the world at 0 N 0 E, so latitude and
    longitude are hidden. Add a GPS origin to the libfpv fork, and anchor Los
    Santos on Los Angeles coordinates.
