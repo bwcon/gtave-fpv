@@ -4,6 +4,7 @@
 #include <cstring>
 
 #include "drone.h"
+#include "dvr.h"
 #include "fpvapi.h"
 #include "radio.h"
 
@@ -48,12 +49,12 @@ void draw_goggles_hud(ImDrawList *dl, const render::Rect &r, const fpv_frame &f)
     std::snprintf(s, sizeof s, "%.1fMbps  %dms", mbps, ms);
     text(dl, size, ImVec2(r.x0 + side + size * 1.5f, top), kWhite, s);
 
-    // Recording dot (blinking) and the flight timer.
+    // Recording dot (blinking while the DVR records) and the flight timer.
     double t = drone::flight_seconds();
     int secs = t > 0 ? int(t) : 0;
     std::snprintf(s, sizeof s, "%02d:%02d", secs / 60, secs % 60);
     const float right = r.x1 - side - size * 3.0f;
-    if (secs % 2 == 0)
+    if (dvr::recording() && secs % 2 == 0)
         dl->AddCircleFilled(ImVec2(right - size * 0.6f, top + size * 0.5f), size * 0.28f, IM_COL32(230, 40, 40, 255), 16);
     text(dl, size, ImVec2(right, top), kWhite, s);
 }

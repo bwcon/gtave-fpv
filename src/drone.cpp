@@ -9,6 +9,7 @@
 #include <string>
 
 #include "audio.h"
+#include "dvr.h"
 #include "fpvapi.h"
 #include "log.h"
 #include "natives.h"
@@ -407,6 +408,7 @@ void stop() {
     fpv.fpv_overlay_set_action(kMovePlayerAction, nullptr);
     audio::stop();  // before the drone: the audio thread reads libfpv's synth
     radio::stop();
+    dvr::stop();
     if (g_cam) {
         shv::call(nat::RENDER_SCRIPT_CAMS, false, false, 0, true, false, 0);
         shv::call(nat::SET_CAM_ACTIVE, g_cam, false);
@@ -579,6 +581,7 @@ void tick() {
     apply_camera(fpv_view ? frame.camera : g_view == View::Chase ? frame.chase_camera : frame.los_camera, fpv_view);
     update_prop(frame, fpv_view);
     publish_osd(&frame, fpv_view);
+    dvr::tick((frame.flags & FPV_DRONE_ARMED) != 0);
     publish_status(true);
 
     for (uint32_t i = 0; i < frame.impact_count && i < FPV_MAX_IMPACTS; ++i) {

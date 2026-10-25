@@ -29,7 +29,9 @@ void tick() {
         fpvlog::write("first script tick");
     }
     tab::tick();
-    if (key_pressed(kToggleKey)) drone::toggle();
+    // Alt+F9 is ShadowPlay's record key (and the DVR presses it): not a toggle.
+    bool alt = (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
+    if (key_pressed(kToggleKey) && !alt) drone::toggle();
     drone::tick();
 }
 
