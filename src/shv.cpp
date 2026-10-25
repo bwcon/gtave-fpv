@@ -62,8 +62,16 @@ void unregister_script(HMODULE module) {
     if (g_unregister) g_unregister(module);
 }
 
-void wait(DWORD ms) { g_wait(ms); }
-void native_init(uint64_t hash) { g_init(hash); }
+// Each module has its own copy of these pointers, and the core never calls
+// register_script (the loader owns the script), so resolve on first use.
+void wait(DWORD ms) {
+    if (!g_wait) resolve();
+    g_wait(ms);
+}
+void native_init(uint64_t hash) {
+    if (!g_init) resolve();
+    g_init(hash);
+}
 void native_push(uint64_t value) { g_push(value); }
 uint64_t *native_call() { return g_call(); }
 
