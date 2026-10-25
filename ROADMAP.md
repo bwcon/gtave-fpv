@@ -91,6 +91,14 @@ rates, OSD layout), so that no settings live in a second interface.
    source. Export it to `.ydr` and `.ytyp` with the Sollumz add-on, and pack
    it as an onigiri dlcpack like the car packs. If the model faces sideways,
    set `YawOffset`.
+   - GTA cannot scale an entity, so each quad size needs its own model at real
+     scale (whoop, 3 inch, 5 inch, 7 inch).
+   - Map libfpv quad presets to models, for example `[Models]
+     freestyler-5=<model>` in `GTAVE.FPV.ini`. Picking a quad in the libfpv
+     overlay then changes the model. This needs a libfpv fork function that
+     returns the active preset.
+   - Until then, the mod measures the game's drone props with
+     `GET_MODEL_DIMENSIONS` and picks the one closest to `TargetSize`.
 
 ## Phase 4: collision extras
 

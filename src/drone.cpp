@@ -61,8 +61,9 @@ float g_prop_yaw[4] = {0, 0, 0, 1};  // model-to-drone yaw correction (GTAVE.FPV
 // drone comes first. "rcdrone" is not in that dump: maybe a newer vehicle.
 const char *const kPropCandidates[] = {
     "ba_prop_battle_drone_quad", "rcdrone",                  "ch_prop_arcade_drone_01a",
-    "ba_prop_battle_drone_hornet", "ch_prop_casino_drone_02a", "xs_prop_arena_drone_01",
-    "reh_prop_reh_drone_02a",
+    "ba_prop_battle_drone_hornet", "ch_prop_casino_drone_01a", "ch_prop_casino_drone_02a",
+    "xs_prop_arena_drone_01",    "xs_prop_arena_drone_02",   "reh_prop_reh_drone_02a",
+    "m24_2_prop_m42_drone_01a",  "m24_2_prop_m42_battle_drone_01a",
 };
 
 std::string ini_path() {
@@ -72,44 +73,73 @@ std::string ini_path() {
     return dir.substr(0, dir.find_last_of("\\/")) + "\\GTAVE.FPV.ini";
 }
 
-// [Drone] Model (empty = first candidate found) and YawOffset in degrees.
-void read_settings(std::string *model, float *yaw_offset) {
-    const std::string ini = ini_path();
-    if (GetFileAttributesA(ini.c_str()) == INVALID_FILE_ATTRIBUTES) {
-        WritePrivateProfileStringA("Drone", "Model", "", ini.c_str());
-        WritePrivateProfileStringA("Drone", "YawOffset", "0", ini.c_str());
-    }
+struct DroneSettings {
+    std::string model;        // [Drone] Model: empty = the candidate closest to TargetSize
+    float yaw_offset = 0;     // [Drone] YawOffset, degrees
+    float target_size = 0.30f;  // [Drone] TargetSize, metres across with props (a 5" quad)
+};
+
+std::string ini_get(const std::string &ini, const char *key, const char *fallback) {
     char buf[128];
-    GetPrivateProfileStringA("Drone", "Model", "", buf, sizeof buf, ini.c_str());
-    *model = buf;
-    GetPrivateProfileStringA("Drone", "YawOffset", "0", buf, sizeof buf, ini.c_str());
-    *yaw_offset = float(std::atof(buf));
+    GetPrivateProfileStringA("Drone", key, fallback, buf, sizeof buf, ini.c_str());
+    return buf;
 }
 
-uint32_t pick_prop_model(const std::string &configured) {
-    if (!configured.empty()) {
-        uint32_t hash = shv::call<uint32_t>(nat::GET_HASH_KEY, configured.c_str());
+DroneSettings read_settings() {
+    const std::string ini = ini_path();
+    DroneSettings s;
+    // Writes any missing key with its default, so the file documents itself.
+    auto value = [&](const char *key, const char *fallback) {
+        std::string v = ini_get(ini, key, "\x01");
+        if (v == "\x01") {
+            WritePrivateProfileStringA("Drone", key, fallback, ini.c_str());
+            v = fallback;
+        }
+        return v;
+    };
+    s.model = value("Model", "");
+    s.yaw_offset = float(std::atof(value("YawOffset", "0").c_str()));
+    s.target_size = float(std::atof(value("TargetSize", "0.30").c_str()));
+    return s;
+}
+
+// Largest horizontal extent of a model, metres.
+float model_span(uint32_t hash) {
+    shv::Vec3 min{}, max{};
+    shv::call(nat::GET_MODEL_DIMENSIONS, hash, &min, &max);
+    float x = max.x - min.x, y = max.y - min.y;
+    return x > y ? x : y;
+}
+
+uint32_t pick_prop_model(const DroneSettings &s) {
+    if (!s.model.empty()) {
+        uint32_t hash = shv::call<uint32_t>(nat::GET_HASH_KEY, s.model.c_str());
         if (shv::call<bool>(nat::IS_MODEL_IN_CDIMAGE, hash)) return hash;
-        fpvlog::write("drone model '%s' from GTAVE.FPV.ini is not in the game", configured.c_str());
+        fpvlog::write("drone model '%s' from GTAVE.FPV.ini is not in the game", s.model.c_str());
     }
+    // GTA cannot scale an entity, so pick the model whose size fits best.
     uint32_t chosen = 0;
+    float best = 1e9f;
     for (const char *name : kPropCandidates) {
         uint32_t hash = shv::call<uint32_t>(nat::GET_HASH_KEY, name);
-        bool found = shv::call<bool>(nat::IS_MODEL_IN_CDIMAGE, hash);
-        fpvlog::write("drone model candidate %s: %s", name, found ? "found" : "missing");
-        if (found && !chosen) chosen = hash;
+        if (!shv::call<bool>(nat::IS_MODEL_IN_CDIMAGE, hash)) {
+            fpvlog::write("drone model candidate %s: missing", name);
+            continue;
+        }
+        float span = model_span(hash), miss = std::fabs(span - s.target_size);
+        fpvlog::write("drone model candidate %s: %.2f m across", name, span);
+        if (miss < best) best = miss, chosen = hash;
     }
     return chosen;
 }
 
 void spawn_prop(const float pos[3]) {
-    std::string configured;
-    float yaw_offset = 0;
-    read_settings(&configured, &yaw_offset);
+    const DroneSettings s = read_settings();
+    const float yaw_offset = s.yaw_offset;
     float half = yaw_offset * 0.5f / kRadToDeg;
     g_prop_yaw[0] = 0, g_prop_yaw[1] = 0, g_prop_yaw[2] = std::sin(half), g_prop_yaw[3] = std::cos(half);
 
-    uint32_t model = pick_prop_model(configured);
+    uint32_t model = pick_prop_model(s);
     if (!model) {
         fpvlog::write("no drone model found: the drone flies invisible");
         return;

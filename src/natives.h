@@ -27,6 +27,7 @@ constexpr uint64_t SET_MODEL_AS_NO_LONGER_NEEDED = 0xE532F5D78798DAAB;
 constexpr uint64_t CREATE_OBJECT_NO_OFFSET = 0x9A294B2138ABB884;
 constexpr uint64_t DELETE_ENTITY = 0xAE3CBE5BF394C9C9;  // (Entity *)
 constexpr uint64_t IS_MODEL_A_VEHICLE = 0x19AAC8F07BFEC53E;
+constexpr uint64_t GET_MODEL_DIMENSIONS = 0x03E8D3D5F549087A;  // (model, Vector3 *min, Vector3 *max)
 // (model, x, y, z, heading, isNetwork, bScriptHostVeh, p7) -> Vehicle
 constexpr uint64_t CREATE_VEHICLE = 0xAF35D0D2583051B0;
 constexpr uint64_t SET_VEHICLE_ENGINE_ON = 0x2497C4717C8B881E;  // (vehicle, on, instantly, disableAutoStart)
