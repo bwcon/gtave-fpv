@@ -1,3 +1,9 @@
+# GTA V Enhanced FPV (work in progress)
+
+This fork ports gtaiv-fpv to GTA V Enhanced. Nothing works in GTA V yet. See
+[ROADMAP.md](ROADMAP.md) for the plan. The text below describes the GTA IV
+original.
+
 # GTA IV FPV
 
 ![GTA IV FPV GIF](gtaiv-fpv.gif)
