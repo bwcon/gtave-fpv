@@ -28,6 +28,17 @@ Texture g_textures[] = {{FPV_TEXTURE_OVERLAY_FONT}, {FPV_TEXTURE_OSD_FONT}};
 api::device *g_device = nullptr;
 api::command_queue *g_queue = nullptr;
 
+// ReShade is built with MSVC, which returns ImVec2 (it has constructors)
+// through a hidden pointer passed in RCX. MinGW expects it in RAX, so calling
+// ImGui::GetContentRegionAvail() directly lets ReShade write to a junk
+// address. Call such table entries the MSVC way. ImGui functions returning
+// void, bool, float or references are fine.
+ImVec2 msvc_vec2(ImVec2 (*fn)()) {
+    ImVec2 out;
+    reinterpret_cast<ImVec2 *(*)(ImVec2 *)>(reinterpret_cast<void *>(fn))(&out);
+    return out;
+}
+
 std::atomic<bool> g_load_requested{false};
 std::atomic<DWORD> g_last_draw{0};  // GetTickCount of the last tab frame, 0 = never
 
@@ -186,10 +197,10 @@ void draw(api::effect_runtime *runtime) {
     }
     draw_status();
 
-    ImVec2 avail = ImGui::GetContentRegionAvail();
+    ImVec2 avail = msvc_vec2(imgui_function_table_instance()->GetContentRegionAvail);
     if (avail.x < 400) avail.x = 400;
     if (avail.y < 300) avail.y = 300;
-    const ImVec2 origin = ImGui::GetCursorScreenPos();
+    const ImVec2 origin = msvc_vec2(imgui_function_table_instance()->GetCursorScreenPos);
     fpv.fpv_overlay_set_open(1);
     fpv.fpv_overlay_set_display(avail.x, avail.y, 1.0f);
     // Takes the mouse over the area, so ReShade does not drag its window instead.
