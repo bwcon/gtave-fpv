@@ -55,6 +55,7 @@ endforeach()
 add_custom_target(deploy
   COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:gtave_fpv_core> "${GTAVE_DIR}/"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/shaders/GTAVE_FPV_Lens.fx" "${GTAVE_DIR}/reshade-shaders/Shaders/"
+  COMMAND ${CMAKE_COMMAND} -E copy_if_different "${CMAKE_SOURCE_DIR}/shaders/GTAVE_FPV_Bezel.png" "${GTAVE_DIR}/reshade-shaders/Textures/"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:gtave_fpv_loader> "${GTAVE_DIR}/" || ${CMAKE_COMMAND} -E echo "loader in use, kept the running one"
   COMMAND ${CMAKE_COMMAND} -E copy_if_different "${LIBFPV_DLL}" "${GTAVE_DIR}/" || ${CMAKE_COMMAND} -E echo "libfpv.dll in use, kept the running one"
   DEPENDS gtave_fpv_loader gtave_fpv_core

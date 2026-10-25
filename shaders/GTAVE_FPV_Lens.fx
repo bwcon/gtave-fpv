@@ -1,6 +1,6 @@
 // GTA V Enhanced FPV: the FPV camera's fisheye lens, the video look of the
 // link (analog snow and torn lines, or digital freezes and macroblocks), and
-// an optional goggles bezel around the picture.
+// an optional goggles bezel (a keyed photo) around the picture.
 //
 // The GTAVE.FPV add-on sets the uniforms below every frame. With Active = 0
 // the image passes through unchanged, so the technique stays enabled and runs
@@ -17,11 +17,17 @@ uniform float LensK2 < hidden = true; > = 0.0;
 uniform float Noise < hidden = true; > = 0.0;    // 0 perfect .. 1 unwatchable
 uniform float Breakup < hidden = true; > = 0.0;  // chance of a torn or frozen frame
 uniform float Digital < hidden = true; > = 0.0;  // 1: freezes and blocks instead of snow
-// The goggles' screen inside the window, 0..1. The whole window without a bezel.
+// The picture inside the window, 0..1: the bezel image's opening, or the
+// whole window without a bezel.
 uniform float2 RectMin < hidden = true; > = float2(0.0, 0.0);
 uniform float2 RectMax < hidden = true; > = float2(1.0, 1.0);
 uniform float Bezel < hidden = true; > = 0.0;
 uniform int FrameCount < source = "framecount"; >;
+
+// The goggles bezel: a photo with its screen keyed out (tools/key_bezel.py),
+// stretched over the window and drawn on top of the picture.
+texture BezelTex < source = "GTAVE_FPV_Bezel.png"; > { Width = 2000; Height = 1116; Format = RGBA8; };
+sampler BezelSampler { Texture = BezelTex; };
 
 texture FrozenTex { Width = BUFFER_WIDTH; Height = BUFFER_HEIGHT; Format = RGBA8; };
 sampler Frozen { Texture = FrozenTex; };
@@ -36,17 +42,6 @@ float2 lens_uv(float2 local, float aspect) {
     float r2 = dot(c, c);
     float m = (1.0 + LensK1 * r2 + LensK2 * r2 * r2) / max(1.0 + LensK1 + LensK2, 0.05);
     return c * m / s + 0.5;
-}
-
-// 1 inside the goggles' rounded screen, 0 outside, with a soft edge.
-float screen_mask(float2 uv) {
-    if (Bezel < 0.5) return 1.0;
-    float2 p = uv * BUFFER_SCREEN_SIZE;
-    float2 lo = RectMin * BUFFER_SCREEN_SIZE, hi = RectMax * BUFFER_SCREEN_SIZE;
-    float r = 0.045 * BUFFER_HEIGHT;
-    float2 q = abs(p - (lo + hi) * 0.5) - ((hi - lo) * 0.5 - r);
-    float dist = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
-    return 1.0 - smoothstep(-1.5, 1.5, dist);
 }
 
 // A digital link holds its last good frame when it stutters.
@@ -90,13 +85,11 @@ float4 PS_Lens(float4 pos : SV_Position, float2 uv : TEXCOORD) : SV_Target {
     if (Active < 0.5) return tex2D(ReShade::BackBuffer, uv);
     if (frozen()) return float4(tex2D(Frozen, uv).rgb, 1.0);
 
-    float mask = screen_mask(uv);
-    float3 col = mask > 0.0 ? picture(uv) : float3(0.0, 0.0, 0.0);
+    bool inside = all(uv >= RectMin) && all(uv <= RectMax);
+    float3 col = inside ? picture(uv) : float3(0.0, 0.0, 0.0);
     if (Bezel > 0.5) {
-        // The goggles' dark interior, a little lighter towards the screen.
-        float2 c = uv - (RectMin + RectMax) * 0.5;
-        float3 shell = float3(0.012, 0.012, 0.014) * (1.6 - length(c * float2(1.0, 1.3)));
-        col = lerp(shell, col, mask);
+        float4 bezel = tex2D(BezelSampler, uv);
+        col = lerp(col, bezel.rgb, bezel.a);
     }
     return float4(col, 1.0);
 }

@@ -107,8 +107,20 @@ DroneSettings read_settings() {
     return s;
 }
 
-// [View] Bezel: the goggles bezel around the FPV picture (G toggles it).
-bool read_bezel() { return GetPrivateProfileIntA("View", "Bezel", 1, ini_path().c_str()) != 0; }
+// [View] Bezel: the goggles bezel around the FPV picture (G toggles it), and
+// BezelRect: its image's opening as window fractions, from tools/key_bezel.py.
+bool read_bezel() {
+    const std::string ini = ini_path();
+    char buf[96];
+    GetPrivateProfileStringA("View", "BezelRect", "", buf, sizeof buf, ini.c_str());
+    if (!buf[0]) {
+        std::snprintf(buf, sizeof buf, "0.0735,0.0860,0.9255,0.9238");
+        WritePrivateProfileStringA("View", "BezelRect", buf, ini.c_str());
+    }
+    float r[4];
+    if (std::sscanf(buf, "%f,%f,%f,%f", &r[0], &r[1], &r[2], &r[3]) == 4) render::set_bezel_rect(r[0], r[1], r[2], r[3]);
+    return GetPrivateProfileIntA("View", "Bezel", 1, ini.c_str()) != 0;
+}
 void save_bezel(bool on) { WritePrivateProfileStringA("View", "Bezel", on ? "1" : "0", ini_path().c_str()); }
 
 // Largest horizontal extent of a model, metres.

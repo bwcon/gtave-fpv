@@ -117,13 +117,20 @@ void set_screen(float width, float height) {
 void set_bezel(bool on) { g_bezel = on; }
 bool bezel() { return g_bezel; }
 
-Rect picture_rect(bool hd) {
+// The bezel image's opening as window fractions (tools/key_bezel.py prints it).
+std::atomic<float> g_bezel_rect[4] = {0.0735f, 0.0860f, 0.9255f, 0.9238f};
+
+void set_bezel_rect(float x0, float y0, float x1, float y1) {
+    if (!(x0 >= 0 && y0 >= 0 && x1 <= 1 && y1 <= 1 && x1 - x0 > 0.1f && y1 - y0 > 0.1f)) return;
+    g_bezel_rect[0] = x0, g_bezel_rect[1] = y0, g_bezel_rect[2] = x1, g_bezel_rect[3] = y1;
+}
+
+// ponytail: both OSD modes use the bezel's (16:9) opening; libfpv centres the
+// analog 4:3 OSD grid inside it.
+Rect picture_rect(bool) {
     const float w = g_screen_w, h = g_screen_h;
     if (!g_bezel) return {0, 0, w, h};
-    const float aspect = hd ? 16.0f / 9.0f : 4.0f / 3.0f;
-    float ph = h * 0.86f, pw = ph * aspect;  // goggles: the screen fills most of the view
-    if (pw > w * 0.94f) pw = w * 0.94f, ph = pw / aspect;
-    return {(w - pw) * 0.5f, (h - ph) * 0.5f, (w + pw) * 0.5f, (h + ph) * 0.5f};
+    return {g_bezel_rect[0] * w, g_bezel_rect[1] * h, g_bezel_rect[2] * w, g_bezel_rect[3] * h};
 }
 
 Rect picture_rect_of_window() { return {0, 0, g_screen_w, g_screen_h}; }

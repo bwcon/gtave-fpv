@@ -34,8 +34,11 @@ void set_screen(float width, float height);
 void set_bezel(bool on);
 bool bezel();
 
-// Where the FPV picture goes, in window pixels: the goggles' screen (16:9 for
-// HD, 4:3 for analog) when the bezel is on, the whole window otherwise.
+// The bezel image's opening, as window fractions ([View] BezelRect). Any thread.
+void set_bezel_rect(float x0, float y0, float x1, float y1);
+
+// Where the FPV picture goes, in window pixels: the bezel image's opening
+// when the bezel is on, the whole window otherwise.
 struct Rect {
     float x0, y0, x1, y1;
     float w() const { return x1 - x0; }
