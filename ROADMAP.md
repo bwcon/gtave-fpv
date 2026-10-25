@@ -73,8 +73,11 @@ Exit check: the drone arms, flies and bounces off a wall.
 
 ## Phase 4: collision extras
 
-1. Swept probe from the previous to the current position each tick, to stop
-   fast flight through thin geometry.
+1. libfpv already casts 15 rays per tick: 6 axes, 8 diagonals and one along
+   the velocity that reaches `max(2 m, speed x 0.3 s)` ahead
+   (`refreshRaycastProxies` in libfpv `src/frame.cpp`). If tests show the
+   drone passing through thin geometry, such as poles beside the flight path,
+   add extra rays.
 2. Dynamic collision objects for vehicles, so that the drone can land on
    moving cars.
 3. Optional: export `.ybn` collision for one area with CodeWalker.Core and load
