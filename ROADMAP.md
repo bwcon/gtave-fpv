@@ -99,6 +99,11 @@ rates, OSD layout), so that no settings live in a second interface.
    moving cars.
 3. Optional: export `.ybn` collision for one area with CodeWalker.Core and load
    it as a fixed race track.
+4. Slatted fences collide as one flat panel. The probe sees the mover bounds
+   that peds and vehicles use, and those are often a solid box. First test
+   whether a bullet passes through a gap. If it does, GTA has more detailed
+   weapon bounds for that fence, and the export in item 3 can use them. If it
+   does not, no collision source in the game has the gaps.
 
 ## Phase 5: full HD OSD (libfpv fork)
 
