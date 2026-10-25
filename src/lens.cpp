@@ -23,10 +23,17 @@ const char *const kNames[VarCount] = {"Active",  "LensK1",  "LensK2",  "Noise", 
 api::effect_runtime *g_runtime = nullptr;
 api::effect_uniform_variable g_vars[VarCount];
 bool g_found = false;
+// The technique, switched on only in the FPV view so it costs nothing otherwise.
+api::effect_technique g_technique = {0};
+int g_technique_on = -1;  // -1 unknown: set on the first frame
+int g_refind = 0;         // frames until looking the uniforms up again
 
 void find(api::effect_runtime *runtime) {
     g_runtime = runtime;
     g_found = false;
+    g_technique = {0};
+    g_technique_on = -1;
+    runtime->enumerate_techniques(kEffect, [](api::effect_runtime *, api::effect_technique tech) { g_technique = tech; });
     for (auto &v : g_vars) v = {0};
     runtime->enumerate_uniform_variables(kEffect, [](api::effect_runtime *rt, api::effect_uniform_variable var) {
         char name[64] = "";
@@ -37,10 +44,20 @@ void find(api::effect_runtime *runtime) {
     });
     g_found = g_vars[Active].handle != 0;
     static bool reported = false;
-    if (!g_found && !reported) {
+    if (!g_technique.handle && !reported) {
         reported = true;
-        fpvlog::write("lens: %s is not loaded (add GTAVE_FPV_Lens@%s to the ReShade preset)", kEffect, kEffect);
+        fpvlog::write("lens: %s is not in ReShade (copy it to reshade-shaders\\Shaders)", kEffect);
     }
+}
+
+// On in the FPV view, off otherwise. Enabling an effect ReShade skipped at
+// startup ("load only enabled effects") queues it for loading, so its
+// uniforms can appear a few frames later.
+void switch_technique(api::effect_runtime *runtime, bool on) {
+    if (!g_technique.handle || g_technique_on == int(on)) return;
+    runtime->set_technique_state(g_technique, on);
+    g_technique_on = on;
+    if (on && !g_found) g_refind = 30;
 }
 
 void set(api::effect_runtime *rt, Var v, float x, float y = 0, size_t count = 1) {
@@ -51,9 +68,10 @@ void set(api::effect_runtime *rt, Var v, float x, float y = 0, size_t count = 1)
 }  // namespace
 
 void begin_effects(api::effect_runtime *runtime) {
-    if (runtime != g_runtime) find(runtime);
-    if (!g_found) return;
+    if (runtime != g_runtime || (g_refind > 0 && --g_refind == 0)) find(runtime);
     drone::LensState s = drone::lens_state();
+    switch_technique(runtime, s.active);
+    if (!g_found) return;
     set(runtime, Active, s.active ? 1.0f : 0.0f);
     if (!s.active) return;
     set(runtime, LensK1, s.k1);
