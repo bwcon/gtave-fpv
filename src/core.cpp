@@ -1,14 +1,19 @@
-// GTA IV FPV drone mode, powered by libfpv. This is GTAIV.FPV.core.dll; the
-// GTAIV.FPV.asi loader calls it every script tick and hot-reloads it.
+// GTA V Enhanced FPV drone mode, powered by libfpv. This is GTAVE.FPV.core.dll;
+// the GTAVE.FPV.asi loader calls it every script tick and every ReShade frame,
+// and hot-reloads it when a new build is deployed.
 #include <windows.h>
 
-#include "autotest.h"
+#define ImTextureID ImU64  // ReShade passes resource views as 64-bit texture IDs
+#include <imgui.h>
+#include <reshade.hpp>
+
 #include "drone.h"
+#include "fpvapi.h"
 #include "log.h"
-#include "recon.h"
-#include "render.h"
 
 namespace {
+
+constexpr int kToggleKey = VK_F9;  // F7 is AddonSpawner's
 
 // The first reading of each key is only a baseline (see drone.cpp).
 bool key_pressed(int vk) {
@@ -25,24 +30,45 @@ void tick() {
     if (first) {
         first = false;
         fpvlog::write("first script tick");
-        recon::run_once();
     }
-    if (key_pressed(VK_F7)) drone::toggle();
-    autotest::tick();
+    if (key_pressed(kToggleKey)) drone::toggle();
     drone::tick();
+}
+
+// ReShade's "GTAVE.FPV" tab.
+void draw_tab() {
+    drone::Status s = drone::status();
+    ImGui::TextUnformatted("GTA V Enhanced FPV (Phase 1)");
+    ImGui::Separator();
+    if (!s.loaded) {
+        ImGui::TextUnformatted("libfpv loads on the first F9.");
+    } else {
+        ImGui::Text("Input: %s%s", s.device[0] ? s.device : "keyboard", s.needs_setup ? " (needs setup)" : "");
+        ImGui::Text("Drone: %s", s.flying ? "flying" : "landed / off");
+        if (s.flying) {
+            ImGui::Text("Position %.1f %.1f %.1f", s.position[0], s.position[1], s.position[2]);
+            ImGui::Text("Speed %.0f km/h   FOV %.0f   near clip %.3f", s.speed_kmh, s.fov, s.near_clip);
+            if (s.arming[0]) ImGui::Text("Arming blocked: %s", s.arming);
+        }
+    }
+    ImGui::Separator();
+    ImGui::TextUnformatted("F9 launch / land   C camera   R respawn   Y move player here");
+    ImGui::TextUnformatted("Keyboard: W/S throttle, A/D yaw, arrows pitch/roll, Enter arm");
 }
 
 }  // namespace
 
-extern "C" __declspec(dllexport) void gtaiv_fpv_core_tick() { tick(); }
+extern "C" __declspec(dllexport) void gtave_fpv_core_tick() { tick(); }
 
-// The loader's D3D hook, on the render thread.
-extern "C" __declspec(dllexport) void gtaiv_fpv_core_render(IDirect3DDevice9 *dev) { render::frame(dev); }
-extern "C" __declspec(dllexport) void gtaiv_fpv_core_release_d3d() { render::release(); }
+// ReShade calls, forwarded by the loader on the render thread. The ImGui
+// function table belongs to the loader's ReShade registration.
+extern "C" __declspec(dllexport) void gtave_fpv_core_tab(reshade::api::effect_runtime *, const imgui_function_table *table) {
+    imgui_function_table_instance() = table;
+    draw_tab();
+}
 
 // Called before the loader unloads this core: leave nothing pointing into it.
-extern "C" __declspec(dllexport) void gtaiv_fpv_core_unload() {
+extern "C" __declspec(dllexport) void gtave_fpv_core_unload() {
     if (drone::active()) drone::toggle();
-    autotest::abort();
     fpvlog::write("core unloaded");
 }

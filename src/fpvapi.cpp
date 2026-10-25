@@ -31,10 +31,6 @@ void on_fpv_log(void *, fpv_log_level level, const char *message) {
 
 bool loaded() { return g_loaded; }
 
-bool kamikaze() {
-    return g_loaded && fpv.fpv_kamikaze_poll_detonation && fpv.fpv_kamikaze_get_state && fpv.fpv_kamikaze_get_config;
-}
-
 bool load() {
     if (g_loaded) return true;
     if (g_failed) return false;
@@ -56,21 +52,16 @@ bool load() {
     FPV_FUNCTIONS(FPV_FN)
 #undef FPV_FN
     if (!ok) return false;
-#define FPV_FN(name) \
-    fpv.name = reinterpret_cast<decltype(fpv.name)>(reinterpret_cast<void *>(GetProcAddress(lib, #name)));
-    FPV_KAMIKAZE_FUNCTIONS(FPV_FN)
-    FPV_OPTIONAL_FUNCTIONS(FPV_FN)
-#undef FPV_FN
 
     std::string data_dir = game_dir() + "\\fpv-data";
     fpv_global_config cfg;
     fpv.fpv_global_config_defaults(&cfg);
     cfg.data_dir = data_dir.c_str();
-    // GTA IV: metres, X east, Y north, Z up.
+    // GTA V: metres, X east, Y north, Z up.
     cfg.coords = {FPV_AXIS_POS_X, FPV_AXIS_POS_Z, FPV_AXIS_POS_Y, 1.0f};
     // Prefer the loader's callback: libfpv keeps it across core reloads.
     if (auto loader_log = reinterpret_cast<fpv_log_fn>(reinterpret_cast<void *>(
-            GetProcAddress(GetModuleHandleA("GTAIV.FPV.asi"), "gtaiv_fpv_libfpv_log"))))
+            GetProcAddress(GetModuleHandleA("GTAVE.FPV.asi"), "gtave_fpv_libfpv_log"))))
         cfg.log = loader_log;
     else
         cfg.log = &on_fpv_log;
@@ -82,8 +73,7 @@ bool load() {
     }
     g_failed = false;
     g_loaded = true;
-    fpvlog::write("libfpv %s initialised (%s), data in %s", fpv.fpv_version_string(),
-                  kamikaze() ? "kamikaze build" : "no warhead", data_dir.c_str());
+    fpvlog::write("libfpv %s initialised, data in %s", fpv.fpv_version_string(), data_dir.c_str());
     return true;
 }
 

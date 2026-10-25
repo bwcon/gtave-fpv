@@ -50,6 +50,23 @@ Exit check: all four work in the game.
 
 Exit check: the drone arms, flies and bounces off a wall.
 
+Keys: F9 launch and land (F7 belongs to AddonSpawner), C camera, R respawn,
+Y move the player to the drone. The radio setup comes from `fpv-data` in the
+game folder, copied from the standalone example's `data` folder.
+
+## Phase 1b: libfpv settings in the ReShade tab
+
+The ReShade tab "GTAVE.FPV" hosts the full libfpv overlay (setup wizard,
+rates, OSD layout), so that no settings live in a second interface.
+
+1. Upload the libfpv font textures through the ReShade device and use the
+   resource views as ImGui texture IDs.
+2. Copy `fpv_overlay_render` draw lists into the tab's ImGui draw list. The
+   libfpv vertex layout matches `ImDrawVert`.
+3. Forward the tab's mouse, wheel, keys and text to the `fpv_overlay_*` input
+   functions.
+4. Re-enable the overlay keys (F8, Esc, Tab) in `forward_keys`.
+
 ## Phase 2: visible drone and OSD
 
 1. Spawn a drone prop. Turn off its collision and exclude it from probes.

@@ -1,85 +1,59 @@
-// GTAIV.FPV.asi: a thin loader around GTAIV.FPV.core.dll. It owns the
-// ScriptHook thread and the log, and reloads the core when a new build is
-// deployed (the file's timestamp changes), so the game needn't restart.
-// The core is loaded from a copy so the build can overwrite the original.
-// It also owns ScriptHook's D3D hook and forwards each frame to the core.
+// GTAVE.FPV.asi: a thin loader around GTAVE.FPV.core.dll. It owns the
+// ScriptHookV script, the log and the ReShade add-on registration, and reloads
+// the core when a new build is deployed (the file's timestamp changes), so the
+// game needn't restart. The core is loaded from a copy so the build can
+// overwrite the original. ReShade's per-frame calls are forwarded to the core.
 #include <windows.h>
 
-#include <d3d9.h>
+#define ImTextureID ImU64  // ReShade passes resource views as 64-bit texture IDs
+#include <imgui.h>
+#include <reshade.hpp>
 
 #include "log.h"
-#include "scripthook.h"
+#include "shv.h"
+
+// Shown in ReShade's Add-ons tab.
+extern "C" {
+__declspec(dllexport) const char *NAME = "GTAVE.FPV";
+__declspec(dllexport) const char *DESCRIPTION = "FPV drone with real Betaflight (libfpv) for GTA V Enhanced";
+}
 
 namespace {
 
-const char *const kCore = "GTAIV.FPV.core.dll";
-const char *const kLiveCopy = "GTAIV.FPV.core.live.dll";
+const char *const kCore = "GTAVE.FPV.core.dll";
+const char *const kLiveCopy = "GTAVE.FPV.core.live.dll";
 
 using CoreFn = void (*)();
-using CoreRenderFn = void (*)(IDirect3DDevice9 *);
+using CoreTabFn = void (*)(reshade::api::effect_runtime *, const imgui_function_table *);
 
+HMODULE g_module = nullptr;
 HMODULE g_core = nullptr;
 CoreFn g_core_tick = nullptr;
 CoreFn g_core_unload = nullptr;
-CoreRenderFn g_core_render = nullptr;
-CoreFn g_core_release_d3d = nullptr;
+CoreTabFn g_core_tab = nullptr;
 FILETIME g_core_time{};
+bool g_addon = false;
 
 // The render thread holds this shared while it calls into the core; a reload
 // takes it exclusively, so the core is never unloaded mid-frame.
 SRWLOCK g_core_lock = SRWLOCK_INIT;
-// Before unloading, the core's D3D resources are released on the render thread.
-volatile LONG g_release_request = 0;
-volatile LONG g_render_calls = 0;  // OnRender count, to notice a dropped hook
-HANDLE g_released = CreateEventA(nullptr, TRUE, FALSE, nullptr);
 
-// ScriptHook's ID3DDeviceHook, built by hand (MSVC thiscall vtable):
-// OnCreateDevice, OnResetDevice, OnLostDevice, OnDestroyDevice, OnRender.
-void __attribute__((thiscall)) on_create(void *, IDirect3DDevice9 *, D3DPRESENT_PARAMETERS *) {}
-void __attribute__((thiscall)) on_reset(void *, IDirect3DDevice9 *, D3DPRESENT_PARAMETERS *) {}
-
-void __attribute__((thiscall)) on_lost(void *, IDirect3DDevice9 *) {
+void on_tab(reshade::api::effect_runtime *runtime) {
     AcquireSRWLockShared(&g_core_lock);
-    if (g_core_release_d3d) g_core_release_d3d();
+    if (g_core_tab)
+        g_core_tab(runtime, imgui_function_table_instance());
+    else
+        ImGui::TextUnformatted("GTAVE.FPV.core.dll is not loaded, see GTAVE.FPV.log");
     ReleaseSRWLockShared(&g_core_lock);
 }
 
-void __attribute__((thiscall)) on_render(void *, IDirect3DDevice9 *dev) {
-    InterlockedIncrement(&g_render_calls);
-    AcquireSRWLockShared(&g_core_lock);
-    if (InterlockedExchange(&g_release_request, 0)) {
-        if (g_core_release_d3d) g_core_release_d3d();
-        SetEvent(g_released);
-    } else if (g_core_render) {
-        g_core_render(dev);
-    }
-    ReleaseSRWLockShared(&g_core_lock);
-}
-
-void *g_hook_vtable[5] = {
-    reinterpret_cast<void *>(&on_create), reinterpret_cast<void *>(&on_reset), reinterpret_cast<void *>(&on_lost),
-    reinterpret_cast<void *>(&on_lost),  // OnDestroyDevice: same cleanup
-    reinterpret_cast<void *>(&on_render),
-};
-struct {
-    void **vtable;
-} g_hook = {g_hook_vtable};
-
-void install_d3d_hook() {
-    using RequestFn = void *(__cdecl *)(const char *);
-    auto request = reinterpret_cast<RequestFn>(reinterpret_cast<void *>(GetProcAddress(
-        GetModuleHandleA("ScriptHook.dll"), "?RequestService@ScriptHookManager@@SAPAVIService@@PBD@Z")));
-    void *service = request ? request("D3DHook") : nullptr;
-    if (!service) {
-        fpvlog::write("loader: ScriptHook D3DHook service unavailable, no OSD/overlay");
-        return;
-    }
-    // IService: dtor, GetServiceName, GetDependencies, OnServiceStart, OnServiceStop;
-    // ID3DHookService: [5] AddDeviceHook, [6] RemoveDeviceHook.
-    using AddHookFn = void(__attribute__((thiscall)) *)(void *, void *);
-    auto add = reinterpret_cast<AddHookFn>((*static_cast<void ***>(service))[5]);
-    add(service, &g_hook);
-    fpvlog::write("loader: D3D hook installed");
+// ReShade.asi loads after this ASI (the loader goes alphabetically), so the
+// script fiber registers once ReShade is in the process.
+void try_register_addon() {
+    if (g_addon || !reshade::register_addon(g_module)) return;
+    reshade::register_overlay("GTAVE.FPV", &on_tab);
+    g_addon = true;
+    fpvlog::write("loader: registered with ReShade as an add-on (API %d)", RESHADE_API_VERSION);
 }
 
 bool core_changed() {
@@ -92,17 +66,12 @@ bool core_changed() {
 
 void unload_core() {
     if (!g_core) return;
-    if (g_core_release_d3d) {  // let the render thread free the core's textures
-        ResetEvent(g_released);
-        InterlockedExchange(&g_release_request, 1);
-        if (WaitForSingleObject(g_released, 500) != WAIT_OBJECT_0) fpvlog::write("loader: render thread idle, D3D release skipped");
-    }
     AcquireSRWLockExclusive(&g_core_lock);
     if (g_core_unload) g_core_unload();
     FreeLibrary(g_core);
     g_core = nullptr;
-    g_core_tick = g_core_unload = g_core_release_d3d = nullptr;
-    g_core_render = nullptr;
+    g_core_tick = g_core_unload = nullptr;
+    g_core_tab = nullptr;
     ReleaseSRWLockExclusive(&g_core_lock);
 }
 
@@ -112,73 +81,53 @@ void load_core() {
         fpvlog::write("loader: cannot copy %s (error %lu)", kCore, GetLastError());
         return;
     }
-    g_core = LoadLibraryA(kLiveCopy);
-    if (!g_core) {
+    HMODULE core = LoadLibraryA(kLiveCopy);
+    if (!core) {
         fpvlog::write("loader: cannot load %s (error %lu)", kLiveCopy, GetLastError());
         return;
     }
-    auto get = [](const char *name) { return reinterpret_cast<void *>(GetProcAddress(g_core, name)); };
+    auto get = [core](const char *name) { return reinterpret_cast<void *>(GetProcAddress(core, name)); };
     AcquireSRWLockExclusive(&g_core_lock);
-    g_core_tick = reinterpret_cast<CoreFn>(get("gtaiv_fpv_core_tick"));
-    g_core_unload = reinterpret_cast<CoreFn>(get("gtaiv_fpv_core_unload"));
-    g_core_render = reinterpret_cast<CoreRenderFn>(get("gtaiv_fpv_core_render"));
-    g_core_release_d3d = reinterpret_cast<CoreFn>(get("gtaiv_fpv_core_release_d3d"));
+    g_core = core;
+    g_core_tick = reinterpret_cast<CoreFn>(get("gtave_fpv_core_tick"));
+    g_core_unload = reinterpret_cast<CoreFn>(get("gtave_fpv_core_unload"));
+    g_core_tab = reinterpret_cast<CoreTabFn>(get("gtave_fpv_core_tab"));
     ReleaseSRWLockExclusive(&g_core_lock);
     fpvlog::write("loader: core loaded (tick %p)", reinterpret_cast<void *>(g_core_tick));
 }
 
-// Loading a save restarts ScriptHook's threads and services, and our D3D
-// hook stops being called (no OSD, lens or overlay). After a restart, add it
-// again once a second of ticks went by without a single OnRender; checking
-// first avoids registering it twice if it survived.
-void keep_d3d_hook() {
-    static bool hooked = false;
-    static unsigned kills = 0;
-    static int wait = -1;
-    static LONG renders = 0;
-    if (!hooked) {  // services are up once scripts tick
-        hooked = true;
-        kills = sh::kill_count();
-        install_d3d_hook();
-        return;
+void script_main() {
+    fpvlog::write("loader: script running");
+    for (unsigned poll = 0;; ++poll) {
+        try_register_addon();
+        if (poll % 30 == 0 && core_changed()) load_core();
+        if (g_core_tick) g_core_tick();
+        shv::wait(0);
     }
-    if (sh::kill_count() != kills) {
-        kills = sh::kill_count();
-        wait = 60;
-        renders = g_render_calls;
-        fpvlog::write("loader: script threads restarted (save loaded?), watching the D3D hook");
-    }
-    if (wait < 0 || --wait > 0) return;
-    wait = -1;
-    if (g_render_calls != renders) {
-        fpvlog::write("loader: D3D hook still called after the restart");
-        return;
-    }
-    fpvlog::write("loader: D3D hook dropped by the restart, adding it again");
-    install_d3d_hook();
-}
-
-void tick() {
-    keep_d3d_hook();
-    static int poll = 0;
-    if (poll++ % 30 == 0 && core_changed()) load_core();
-    if (g_core_tick) g_core_tick();
 }
 
 }  // namespace
 
 // libfpv's log callback lives here, not in the core, because libfpv keeps
 // calling it from its own threads across core reloads.
-extern "C" __declspec(dllexport) void gtaiv_fpv_libfpv_log(void *, int level, const char *message) {
+extern "C" __declspec(dllexport) void gtave_fpv_libfpv_log(void *, int level, const char *message) {
     static const char *names[] = {"debug", "info", "warn", "error"};
     fpvlog::write("libfpv %s: %s", names[level & 3], message);
 }
 
-BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID) {
+BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID reserved) {
     if (reason == DLL_PROCESS_ATTACH) {
         DisableThreadLibraryCalls(module);
-        fpvlog::write("GTAIV.FPV attached");
-        sh::register_thread(&tick);
+        g_module = module;
+        fpvlog::write("GTAVE.FPV attached");
+        shv::register_script(module, &script_main);
+    } else if (reason == DLL_PROCESS_DETACH && reserved == nullptr) {
+        // Only on a real unload. At process exit ReShade may already be gone.
+        if (g_addon) {
+            reshade::unregister_overlay("GTAVE.FPV", &on_tab);
+            reshade::unregister_addon(module);
+        }
+        shv::unregister_script(module);
     }
     return TRUE;
 }
