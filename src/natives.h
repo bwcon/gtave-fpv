@@ -18,6 +18,21 @@ constexpr uint64_t SET_ENTITY_INVINCIBLE = 0x3882114BDE571AD4;  // (entity, bool
 constexpr uint64_t SET_ENTITY_COORDS = 0x06843DA7060A026B;  // (entity, x, y, z, bool, bool, bool, bool clearArea)
 constexpr uint64_t SET_ENTITY_HEADING = 0x8E2530AA8ADA980E;
 
+constexpr uint64_t GET_HASH_KEY = 0xD24D37CC275948CC;  // (const char *) -> Hash
+constexpr uint64_t IS_MODEL_IN_CDIMAGE = 0x35B9E0803292B641;
+constexpr uint64_t REQUEST_MODEL = 0x963D27A58DF860AC;
+constexpr uint64_t HAS_MODEL_LOADED = 0x98A4EB5D89A0C952;
+constexpr uint64_t SET_MODEL_AS_NO_LONGER_NEEDED = 0xE532F5D78798DAAB;
+// (model, x, y, z, isNetwork, bScriptHostObj, dynamic, p7) -> Object
+constexpr uint64_t CREATE_OBJECT_NO_OFFSET = 0x9A294B2138ABB884;
+constexpr uint64_t DELETE_OBJECT = 0x539E0AE3E6634B9F;  // (Object *)
+constexpr uint64_t DOES_ENTITY_EXIST = 0x7239B21A38F536BA;
+constexpr uint64_t SET_ENTITY_AS_MISSION_ENTITY = 0xAD738C3085FE7E11;  // (entity, bool, bool)
+constexpr uint64_t SET_ENTITY_COLLISION = 0x1A9205C1B9EE827F;          // (entity, toggle, keepPhysics)
+constexpr uint64_t SET_ENTITY_COORDS_NO_OFFSET = 0x239A3351AC1DA385;   // (entity, x, y, z, bool, bool, bool)
+constexpr uint64_t SET_ENTITY_QUATERNION = 0x77B21BE7AC540F07;         // (entity, x, y, z, w)
+constexpr uint64_t SET_ENTITY_VISIBLE = 0xEA1C610A04DB6BBB;            // (entity, toggle, bool)
+
 constexpr uint64_t CREATE_CAM = 0xC3981DCE61D9E13F;  // (name, bool)
 constexpr uint64_t SET_CAM_ACTIVE = 0x026FB97D0A425F84;
 constexpr uint64_t RENDER_SCRIPT_CAMS = 0x07E5B515DB0636FC;  // (render, ease, easeTime, p3, p4, p5)

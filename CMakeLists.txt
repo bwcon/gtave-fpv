@@ -26,6 +26,8 @@ add_library(gtave_fpv_core SHARED
   src/drone.cpp
   src/fpvapi.cpp
   src/world.cpp
+  src/osd.cpp
+  src/render.cpp
   src/tab.cpp
   src/shv.cpp
   src/log.cpp

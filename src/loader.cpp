@@ -32,6 +32,7 @@ HMODULE g_core = nullptr;
 CoreFn g_core_tick = nullptr;
 CoreFn g_core_unload = nullptr;
 CoreTabFn g_core_tab = nullptr;
+CoreTabFn g_core_overlay = nullptr;
 CoreDeviceFn g_core_release_device = nullptr;
 FILETIME g_core_time{};
 bool g_addon = false;
@@ -49,6 +50,13 @@ void on_tab(reshade::api::effect_runtime *runtime) {
     ReleaseSRWLockShared(&g_core_lock);
 }
 
+// Every frame, menu open or closed: the OSD.
+void on_overlay(reshade::api::effect_runtime *runtime) {
+    AcquireSRWLockShared(&g_core_lock);
+    if (g_core_overlay) g_core_overlay(runtime, imgui_function_table_instance());
+    ReleaseSRWLockShared(&g_core_lock);
+}
+
 // The game recreates its D3D12 device during startup: the core's textures
 // must go before the device they were made on.
 void on_destroy_device(reshade::api::device *device) {
@@ -63,6 +71,7 @@ void try_register_addon() {
     if (g_addon || !reshade::register_addon(g_module)) return;
     reshade::register_overlay("GTAVE.FPV", &on_tab);
     reshade::register_event<reshade::addon_event::destroy_device>(&on_destroy_device);
+    reshade::register_event<reshade::addon_event::reshade_overlay>(&on_overlay);
     g_addon = true;
     fpvlog::write("loader: registered with ReShade as an add-on (API %d)", RESHADE_API_VERSION);
 }
@@ -83,6 +92,7 @@ void unload_core() {
     g_core = nullptr;
     g_core_tick = g_core_unload = nullptr;
     g_core_tab = nullptr;
+    g_core_overlay = nullptr;
     g_core_release_device = nullptr;
     ReleaseSRWLockExclusive(&g_core_lock);
 }
@@ -104,6 +114,7 @@ void load_core() {
     g_core_tick = reinterpret_cast<CoreFn>(get("gtave_fpv_core_tick"));
     g_core_unload = reinterpret_cast<CoreFn>(get("gtave_fpv_core_unload"));
     g_core_tab = reinterpret_cast<CoreTabFn>(get("gtave_fpv_core_tab"));
+    g_core_overlay = reinterpret_cast<CoreTabFn>(get("gtave_fpv_core_overlay"));
     g_core_release_device = reinterpret_cast<CoreDeviceFn>(get("gtave_fpv_core_release_device"));
     ReleaseSRWLockExclusive(&g_core_lock);
     fpvlog::write("loader: core loaded (tick %p)", reinterpret_cast<void *>(g_core_tick));
@@ -139,6 +150,7 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID reserved) {
         if (g_addon) {
             reshade::unregister_overlay("GTAVE.FPV", &on_tab);
             reshade::unregister_event<reshade::addon_event::destroy_device>(&on_destroy_device);
+            reshade::unregister_event<reshade::addon_event::reshade_overlay>(&on_overlay);
             reshade::unregister_addon(module);
         }
         shv::unregister_script(module);

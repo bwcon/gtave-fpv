@@ -32,6 +32,15 @@ void on_fpv_log(void *, fpv_log_level level, const char *message) {
 
 bool loaded() { return g_loaded; }
 
+fpv_osd_style osd_style() { return fpv.fpv_osd_get_style ? fpv.fpv_osd_get_style() : FPV_OSD_STYLE_ANALOG; }
+
+void toggle_osd_style() {
+    if (!fpv.fpv_osd_set_style) return;
+    fpv_osd_style next = osd_style() == FPV_OSD_STYLE_HD ? FPV_OSD_STYLE_ANALOG : FPV_OSD_STYLE_HD;
+    fpv.fpv_osd_set_style(next);
+    fpvlog::write("OSD style: %s", next == FPV_OSD_STYLE_HD ? "HD" : "analog");
+}
+
 bool load() {
     if (g_loaded) return true;
     if (g_failed) return false;
@@ -53,16 +62,17 @@ bool load() {
     FPV_FUNCTIONS(FPV_FN)
 #undef FPV_FN
     if (!ok) return false;
+#define FPV_FN(name) \
+    fpv.name = reinterpret_cast<decltype(fpv.name)>(reinterpret_cast<void *>(GetProcAddress(lib, #name)));
+    FPV_FORK_FUNCTIONS(FPV_FN)
+#undef FPV_FN
 
-    // The per-user folder every libfpv game shares (bwcon/libfpv), so the radio
-    // setup and the Betaflight tune follow the pilot. Upstream builds lack it:
-    // keep the settings next to the game then.
+    // The per-user folder every libfpv game shares, so the radio setup and
+    // the Betaflight tune follow the pilot. Upstream builds lack it: keep the
+    // settings next to the game then.
     std::string data_dir = game_dir() + "\\fpv-data";
-    using SharedDirFn = decltype(&::fpv_shared_data_dir);
     char shared[1024];
-    if (auto shared_dir = reinterpret_cast<SharedDirFn>(
-            reinterpret_cast<void *>(GetProcAddress(lib, "fpv_shared_data_dir"))))
-        if (shared_dir(shared, sizeof shared) == FPV_OK) data_dir = shared;
+    if (fpv.fpv_shared_data_dir && fpv.fpv_shared_data_dir(shared, sizeof shared) == FPV_OK) data_dir = shared;
     fpv_global_config cfg;
     fpv.fpv_global_config_defaults(&cfg);
     cfg.data_dir = data_dir.c_str();

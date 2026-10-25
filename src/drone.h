@@ -31,6 +31,10 @@ struct Status {
 };
 Status status();
 
+// Copies the latest frame for the OSD; false when no drone is flying, a
+// third-person camera is on, or the pilot's OSD switch hides it. Any thread.
+bool osd_frame(fpv_frame *out);
+
 // The game camera's Euler angles (degrees) for a view basis in game coords.
 void basis_to_euler(const float forward[3], const float up[3], const float right[3], float *pitch, float *roll,
                     float *heading);

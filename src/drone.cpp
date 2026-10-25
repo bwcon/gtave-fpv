@@ -4,7 +4,9 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <mutex>
+#include <string>
 
 #include "audio.h"
 #include "fpvapi.h"
@@ -42,6 +44,120 @@ float g_near_clip = 0, g_fov = 0;  // last values sent to the game, for the trac
 
 std::mutex g_status_mutex;
 Status g_status;
+
+std::mutex g_osd_mutex;  // guards g_osd_frame / g_osd_visible for the render thread
+fpv_frame g_osd_frame{};
+bool g_osd_visible = false;
+
+// The visible quad: a game prop that follows libfpv's pose. No collision, so
+// the world probes never hit it.
+int g_prop = 0;
+float g_prop_yaw[4] = {0, 0, 0, 1};  // model-to-drone yaw correction (GTAVE.FPV.ini)
+
+// Candidate drone props, tried in order; the first one the game has wins.
+// ponytail: names unverified, the log lists which exist. Override with
+// [Drone] Model= in GTAVE.FPV.ini.
+const char *const kPropCandidates[] = {
+    "ch_prop_casino_drone_02a", "ch_prop_casino_drone_01a", "xs_prop_arena_drone_01a",
+    "reh_prop_reh_drone_02a",   "sf_prop_sf_drone_01a",     "h4_prop_h4_drone_01a",
+};
+
+std::string ini_path() {
+    char path[MAX_PATH];
+    DWORD n = GetModuleFileNameA(nullptr, path, MAX_PATH);
+    std::string dir(path, n);
+    return dir.substr(0, dir.find_last_of("\\/")) + "\\GTAVE.FPV.ini";
+}
+
+// [Drone] Model (empty = first candidate found) and YawOffset in degrees.
+void read_settings(std::string *model, float *yaw_offset) {
+    const std::string ini = ini_path();
+    if (GetFileAttributesA(ini.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        WritePrivateProfileStringA("Drone", "Model", "", ini.c_str());
+        WritePrivateProfileStringA("Drone", "YawOffset", "0", ini.c_str());
+    }
+    char buf[128];
+    GetPrivateProfileStringA("Drone", "Model", "", buf, sizeof buf, ini.c_str());
+    *model = buf;
+    GetPrivateProfileStringA("Drone", "YawOffset", "0", buf, sizeof buf, ini.c_str());
+    *yaw_offset = float(std::atof(buf));
+}
+
+uint32_t pick_prop_model(const std::string &configured) {
+    if (!configured.empty()) {
+        uint32_t hash = shv::call<uint32_t>(nat::GET_HASH_KEY, configured.c_str());
+        if (shv::call<bool>(nat::IS_MODEL_IN_CDIMAGE, hash)) return hash;
+        fpvlog::write("drone model '%s' from GTAVE.FPV.ini is not in the game", configured.c_str());
+    }
+    uint32_t chosen = 0;
+    for (const char *name : kPropCandidates) {
+        uint32_t hash = shv::call<uint32_t>(nat::GET_HASH_KEY, name);
+        bool found = shv::call<bool>(nat::IS_MODEL_IN_CDIMAGE, hash);
+        fpvlog::write("drone model candidate %s: %s", name, found ? "found" : "missing");
+        if (found && !chosen) chosen = hash;
+    }
+    return chosen;
+}
+
+void spawn_prop(const float pos[3]) {
+    std::string configured;
+    float yaw_offset = 0;
+    read_settings(&configured, &yaw_offset);
+    float half = yaw_offset * 0.5f / kRadToDeg;
+    g_prop_yaw[0] = 0, g_prop_yaw[1] = 0, g_prop_yaw[2] = std::sin(half), g_prop_yaw[3] = std::cos(half);
+
+    uint32_t model = pick_prop_model(configured);
+    if (!model) {
+        fpvlog::write("no drone model found: the drone flies invisible");
+        return;
+    }
+    shv::call(nat::REQUEST_MODEL, model);
+    for (int i = 0; i < 200 && !shv::call<bool>(nat::HAS_MODEL_LOADED, model); ++i) shv::wait(0);
+    if (!shv::call<bool>(nat::HAS_MODEL_LOADED, model)) {
+        fpvlog::write("drone model %08x did not load", model);
+        return;
+    }
+    g_prop = shv::call<int>(nat::CREATE_OBJECT_NO_OFFSET, model, pos[0], pos[1], pos[2], false, false, false, 0);
+    shv::call(nat::SET_MODEL_AS_NO_LONGER_NEEDED, model);
+    if (!g_prop) return;
+    shv::call(nat::SET_ENTITY_COLLISION, g_prop, false, false);
+    shv::call(nat::FREEZE_ENTITY_POSITION, g_prop, true);  // libfpv moves it, not GTA's physics
+    fpvlog::write("drone model %08x spawned as %d (yaw offset %.0f)", model, g_prop, yaw_offset);
+}
+
+void delete_prop() {
+    if (!g_prop) return;
+    if (shv::call<bool>(nat::DOES_ENTITY_EXIST, g_prop)) {
+        shv::call(nat::SET_ENTITY_AS_MISSION_ENTITY, g_prop, true, true);
+        shv::call(nat::DELETE_OBJECT, &g_prop);
+    }
+    g_prop = 0;
+}
+
+// q * r for {x, y, z, w} quaternions.
+void quat_mul(const float q[4], const float r[4], float out[4]) {
+    out[0] = q[3] * r[0] + q[0] * r[3] + q[1] * r[2] - q[2] * r[1];
+    out[1] = q[3] * r[1] - q[0] * r[2] + q[1] * r[3] + q[2] * r[0];
+    out[2] = q[3] * r[2] + q[0] * r[1] - q[1] * r[0] + q[2] * r[3];
+    out[3] = q[3] * r[3] - q[0] * r[0] - q[1] * r[1] - q[2] * r[2];
+}
+
+// Hidden in the FPV view, where the camera sits inside it.
+void update_prop(const fpv_frame &frame, bool fpv_view) {
+    if (!g_prop) return;
+    float q[4];
+    quat_mul(frame.rotation, g_prop_yaw, q);
+    shv::call(nat::SET_ENTITY_COORDS_NO_OFFSET, g_prop, frame.position[0], frame.position[1], frame.position[2],
+              false, false, false);
+    shv::call(nat::SET_ENTITY_QUATERNION, g_prop, q[0], q[1], q[2], q[3]);
+    shv::call(nat::SET_ENTITY_VISIBLE, g_prop, !fpv_view, false);
+}
+
+void publish_osd(const fpv_frame *frame, bool visible) {
+    std::lock_guard<std::mutex> lock(g_osd_mutex);
+    if (frame) g_osd_frame = *frame;
+    g_osd_visible = visible;
+}
 
 bool game_has_focus() {
     DWORD pid = 0;
@@ -188,6 +304,7 @@ void start() {
     fpv.fpv_world_set_raycast_callback(&world::raycast, nullptr);
     float home[3] = {p.x, p.y, p.z};
     fpv.fpv_gps_set_home(home);
+    spawn_prop(g_spawn_pos);
 
     hold_player(true);
     g_cam = shv::call<int>(nat::CREATE_CAM, "DEFAULT_SCRIPTED_CAMERA", false);
@@ -217,6 +334,8 @@ void stop() {
         g_cam = 0;
     }
     shv::call(nat::CLEAR_FOCUS);
+    delete_prop();
+    publish_osd(nullptr, false);
     hold_player(false);
     if (g_drone) {
         fpv.fpv_world_set_raycast_callback(nullptr, nullptr);
@@ -260,6 +379,13 @@ bool active() { return g_drone != nullptr; }
 Status status() {
     std::lock_guard<std::mutex> lock(g_status_mutex);
     return g_status;
+}
+
+bool osd_frame(fpv_frame *out) {
+    std::lock_guard<std::mutex> lock(g_osd_mutex);
+    if (!g_osd_visible) return false;
+    *out = g_osd_frame;
+    return true;
 }
 
 // The player faces the drone's heading.
@@ -324,6 +450,7 @@ void tick() {
     if (!fpv.fpv_overlay_wants_input()) {  // otherwise the keys belong to the overlay
         if (key_pressed('C')) g_view = View((int(g_view) + 1) % int(View::Count));
         if (key_pressed('R')) respawn();
+        if (key_pressed('O')) fpvapi::toggle_osd_style();
         if (key_pressed('Y')) {
             move_player_here();
             return;
@@ -353,8 +480,10 @@ void tick() {
     float home[3] = {p.x, p.y, p.z};
     fpv.fpv_gps_set_home(home);
 
-    apply_camera(g_view == View::Fpv ? frame.camera : g_view == View::Chase ? frame.chase_camera : frame.los_camera,
-                 g_view == View::Fpv);
+    const bool fpv_view = g_view == View::Fpv;
+    apply_camera(fpv_view ? frame.camera : g_view == View::Chase ? frame.chase_camera : frame.los_camera, fpv_view);
+    update_prop(frame, fpv_view);
+    publish_osd(&frame, fpv_view && !(frame.flags & FPV_DRONE_OSD_DISABLED));
     publish_status(true);
 
     for (uint32_t i = 0; i < frame.impact_count && i < FPV_MAX_IMPACTS; ++i) {

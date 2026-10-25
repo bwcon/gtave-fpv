@@ -1,14 +1,10 @@
 // GTA V Enhanced FPV drone mode, powered by libfpv. This is GTAVE.FPV.core.dll;
 // the GTAVE.FPV.asi loader calls it every script tick and every ReShade frame,
 // and hot-reloads it when a new build is deployed.
-#include <windows.h>
-
-#define ImTextureID ImU64  // ReShade passes resource views as 64-bit texture IDs
-#include <imgui.h>
-#include <reshade.hpp>
-
 #include "drone.h"
 #include "log.h"
+#include "osd.h"
+#include "render.h"
 #include "tab.h"
 
 namespace {
@@ -47,13 +43,18 @@ extern "C" __declspec(dllexport) void gtave_fpv_core_tab(reshade::api::effect_ru
     imgui_function_table_instance() = table;
     tab::draw(runtime);
 }
+extern "C" __declspec(dllexport) void gtave_fpv_core_overlay(reshade::api::effect_runtime *runtime,
+                                                             const imgui_function_table *table) {
+    imgui_function_table_instance() = table;
+    osd::draw(runtime);
+}
 extern "C" __declspec(dllexport) void gtave_fpv_core_release_device(reshade::api::device *device) {
-    tab::release_device(device);
+    render::release_device(device);
 }
 
 // Called before the loader unloads this core: leave nothing pointing into it.
 extern "C" __declspec(dllexport) void gtave_fpv_core_unload() {
     if (drone::active()) drone::toggle();
-    tab::release_all();
+    render::release_all();
     fpvlog::write("core unloaded");
 }

@@ -17,9 +17,13 @@ namespace fpvapi {
     X(fpv_overlay_set_action) X(fpv_overlay_poll_action) X(fpv_gps_set_home) X(fpv_overlay_set_open) \
     X(fpv_overlay_text)
 
+// Only in bwcon/libfpv builds; null with an upstream libfpv.dll.
+#define FPV_FORK_FUNCTIONS(X) X(fpv_shared_data_dir) X(fpv_osd_get_style) X(fpv_osd_set_style)
+
 struct Api {
 #define FPV_FN(name) decltype(&::name) name = nullptr;
     FPV_FUNCTIONS(FPV_FN)
+    FPV_FORK_FUNCTIONS(FPV_FN)
 #undef FPV_FN
 };
 
@@ -30,5 +34,10 @@ extern Api fpv;
 bool load();
 // Any thread: true once every function in `fpv` is set.
 bool loaded();
+
+// The player's OSD look (the overlay's OSD tab), analog with upstream builds.
+fpv_osd_style osd_style();
+// Analog <-> HD (hotkey). No-op with upstream builds.
+void toggle_osd_style();
 
 }  // namespace fpvapi
