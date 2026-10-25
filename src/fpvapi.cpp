@@ -2,6 +2,7 @@
 
 #include <windows.h>
 
+#include <atomic>
 #include <string>
 
 #include "log.h"
@@ -12,7 +13,7 @@ Api fpv;
 
 namespace {
 
-bool g_loaded = false;
+std::atomic<bool> g_loaded{false};  // the ReShade tab reads it on the render thread
 bool g_failed = false;
 
 std::string game_dir() {

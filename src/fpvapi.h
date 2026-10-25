@@ -14,7 +14,8 @@ namespace fpvapi {
     X(fpv_texture_get) X(fpv_overlay_is_open) X(fpv_overlay_wants_input) X(fpv_overlay_set_display) \
     X(fpv_overlay_mouse_move) X(fpv_overlay_mouse_button) X(fpv_overlay_mouse_wheel)             \
     X(fpv_overlay_render) X(fpv_osd_draw_data) X(fpv_audio_configure) X(fpv_audio_read)          \
-    X(fpv_overlay_set_action) X(fpv_overlay_poll_action) X(fpv_gps_set_home)
+    X(fpv_overlay_set_action) X(fpv_overlay_poll_action) X(fpv_gps_set_home) X(fpv_overlay_set_open) \
+    X(fpv_overlay_text)
 
 struct Api {
 #define FPV_FN(name) decltype(&::name) name = nullptr;
@@ -25,7 +26,9 @@ struct Api {
 extern Api fpv;
 
 // Loads and initialises libfpv once; later calls return the first result.
+// Script fiber only.
 bool load();
+// Any thread: true once every function in `fpv` is set.
 bool loaded();
 
 }  // namespace fpvapi

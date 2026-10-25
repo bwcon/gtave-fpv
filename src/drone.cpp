@@ -50,9 +50,8 @@ bool game_has_focus() {
 }
 
 // Keyboard fallback for players without a radio (libfpv: W/S throttle, A/D yaw,
-// arrows pitch/roll, Enter arms, T turtle, B beeper). The overlay keys (F8,
-// Esc, Tab...) wait until the overlay is drawn in the ReShade tab: an open but
-// invisible overlay would swallow the flight keys.
+// arrows pitch/roll, Enter arms, T turtle, B beeper). The overlay's own keys
+// come from the ReShade tab (tab.cpp), so F8 is not forwarded here.
 void forward_keys() {
     // letters by scan code (physical position, as libfpv wants)
     struct Key { int vk; int fpv; UINT sc; };
@@ -291,7 +290,7 @@ void toggle() {
 
 void tick() {
     if (!fpvapi::loaded()) return;
-    forward_keys();
+    if (!fpv.fpv_overlay_is_open()) forward_keys();  // otherwise the keys are typing in the ReShade tab
     for (uint32_t id; (id = fpv.fpv_overlay_poll_action()) != 0;) {
         if (id == kMovePlayerAction && g_drone) {
             move_player_here();

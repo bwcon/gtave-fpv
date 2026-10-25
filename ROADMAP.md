@@ -110,3 +110,22 @@ with Betaflight use MSP DisplayPort on a 53x20 HD canvas.
    build.
 3. Add an HD OSD font atlas.
 4. Offer the change upstream to hammerill/libfpv.
+
+## Phase 6: GTA world telemetry in the OSD
+
+A radio in simulator mode is a USB joystick, and USB HID data only goes from
+the radio to the PC. Telemetry on the radio screen is therefore not possible,
+so the game data goes into the Betaflight OSD.
+
+1. Area name: `GET_NAME_OF_ZONE` gives the zone code, and `GET_LABEL_TEXT`
+   gives its display name ("Vinewood Hills", "Mount Chiliad"). Show it in a
+   Betaflight "Custom message" OSD element. libfpv already writes Custom
+   message 1 for kamikaze builds; the fork exposes this as an API.
+2. Real-looking GPS: libfpv places the world at 0 N 0 E, so latitude and
+   longitude are hidden. Add a GPS origin to the libfpv fork, and anchor Los
+   Santos on Los Angeles coordinates.
+3. Checkpoint races: GTA checkpoints and blips as gates, timed with
+   Betaflight's GPS lap timer.
+4. Flight plans: Betaflight 2025.12 (the version in libfpv) has no waypoint
+   missions. The autopilot flight plan first appears in Betaflight 2026.6
+   release candidates, so this waits for libfpv to update Betaflight.
