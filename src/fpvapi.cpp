@@ -53,7 +53,15 @@ bool load() {
 #undef FPV_FN
     if (!ok) return false;
 
+    // The per-user folder every libfpv game shares (bwcon/libfpv), so the radio
+    // setup and the Betaflight tune follow the pilot. Upstream builds lack it:
+    // keep the settings next to the game then.
     std::string data_dir = game_dir() + "\\fpv-data";
+    using SharedDirFn = decltype(&::fpv_shared_data_dir);
+    char shared[1024];
+    if (auto shared_dir = reinterpret_cast<SharedDirFn>(
+            reinterpret_cast<void *>(GetProcAddress(lib, "fpv_shared_data_dir"))))
+        if (shared_dir(shared, sizeof shared) == FPV_OK) data_dir = shared;
     fpv_global_config cfg;
     fpv.fpv_global_config_defaults(&cfg);
     cfg.data_dir = data_dir.c_str();
