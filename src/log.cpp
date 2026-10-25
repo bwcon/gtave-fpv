@@ -14,9 +14,9 @@ void write(const char *fmt, ...) {
     // loader starts it afresh.
     static FILE *file = [] {
 #ifndef FPVLOG_APPEND
-        if (FILE *f = std::fopen("GTAIV.FPV.log", "w")) std::fclose(f);
+        if (FILE *f = std::fopen("GTAVE.FPV.log", "w")) std::fclose(f);
 #endif
-        return std::fopen("GTAIV.FPV.log", "a");
+        return std::fopen("GTAVE.FPV.log", "a");
     }();
     if (!file) return;
 
