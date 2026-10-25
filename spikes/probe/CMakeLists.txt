@@ -15,5 +15,9 @@ set(GTAVE_SRC "${CMAKE_CURRENT_SOURCE_DIR}/../../src")
 add_library(gtave_fpv_probe SHARED probe.cpp "${GTAVE_SRC}/shv.cpp" "${GTAVE_SRC}/log.cpp")
 set_target_properties(gtave_fpv_probe PROPERTIES PREFIX "" OUTPUT_NAME "GTAVE.FPV.probe" SUFFIX ".asi")
 target_include_directories(gtave_fpv_probe PRIVATE "${GTAVE_SRC}")
+# Vendored ReShade 6.8.0 + ImGui 1.92.5 headers; SYSTEM hides their MSVC-only warnings.
+target_include_directories(gtave_fpv_probe SYSTEM PRIVATE
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/reshade/include"
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/reshade/imgui")
 target_compile_options(gtave_fpv_probe PRIVATE -Wall -Wextra -Wno-unused-parameter)
 target_link_options(gtave_fpv_probe PRIVATE -static)
