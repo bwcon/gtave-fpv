@@ -11,7 +11,9 @@ namespace {
 // Foliage (256) is left out so bushes stay fly-through. A mask of -1 missed
 // vehicles in the Phase 0 spike (the ray went through a car to the road).
 constexpr int kTypes = 1 | 2 | 4 | 8 | 16;
-constexpr int kOptions = 7;  // ignore glass, see-through and no-collision parts
+// Option bits: 1 ignore glass, 2 ignore see-through, 4 ignore no-collision.
+// Only 4: with 7, chain-link fences and railings (see-through) were fly-through.
+constexpr int kOptions = 4;
 
 int g_ignore = 0;
 
