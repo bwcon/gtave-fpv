@@ -87,9 +87,10 @@ rates, OSD layout), so that no settings live in a second interface.
 4. Turn off DLSS frame generation while flying, because it adds latency.
 5. A real FPV quad model instead of a DJI-style game prop. The code is done:
    `[Drone] Model=` in `GTAVE.FPV.ini` takes any prop name. The work is the
-   asset: a 5-inch quad model (made in Blender, or a free licensed model),
-   exported to `.ydr` and `.ytyp` with the Sollumz add-on, packed as an onigiri
-   dlcpack like the car packs. Set `YawOffset` if the model faces sideways.
+   asset: a 5-inch quad model, made in Blender or taken from a free licensed
+   source. Export it to `.ydr` and `.ytyp` with the Sollumz add-on, and pack
+   it as an onigiri dlcpack like the car packs. If the model faces sideways,
+   set `YawOffset`.
 
 ## Phase 4: collision extras
 
