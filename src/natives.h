@@ -25,7 +25,11 @@ constexpr uint64_t HAS_MODEL_LOADED = 0x98A4EB5D89A0C952;
 constexpr uint64_t SET_MODEL_AS_NO_LONGER_NEEDED = 0xE532F5D78798DAAB;
 // (model, x, y, z, isNetwork, bScriptHostObj, dynamic, p7) -> Object
 constexpr uint64_t CREATE_OBJECT_NO_OFFSET = 0x9A294B2138ABB884;
-constexpr uint64_t DELETE_OBJECT = 0x539E0AE3E6634B9F;  // (Object *)
+constexpr uint64_t DELETE_ENTITY = 0xAE3CBE5BF394C9C9;  // (Entity *)
+constexpr uint64_t IS_MODEL_A_VEHICLE = 0x19AAC8F07BFEC53E;
+// (model, x, y, z, heading, isNetwork, bScriptHostVeh, p7) -> Vehicle
+constexpr uint64_t CREATE_VEHICLE = 0xAF35D0D2583051B0;
+constexpr uint64_t SET_VEHICLE_ENGINE_ON = 0x2497C4717C8B881E;  // (vehicle, on, instantly, disableAutoStart)
 constexpr uint64_t DOES_ENTITY_EXIST = 0x7239B21A38F536BA;
 constexpr uint64_t SET_ENTITY_AS_MISSION_ENTITY = 0xAD738C3085FE7E11;  // (entity, bool, bool)
 constexpr uint64_t SET_ENTITY_COLLISION = 0x1A9205C1B9EE827F;          // (entity, toggle, keepPhysics)

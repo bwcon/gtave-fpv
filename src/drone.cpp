@@ -55,14 +55,14 @@ bool g_osd_visible = false;
 int g_prop = 0;
 float g_prop_yaw[4] = {0, 0, 0, 1};  // model-to-drone yaw correction (GTAVE.FPV.ini)
 
-// Candidate drone props, tried in order; the first one the game has wins.
-// ponytail: names unverified, the log lists which exist. Override with
-// [Drone] Model= in GTAVE.FPV.ini.
-// The Terrorbyte drone (After Hours, "ba_" props) comes first.
+// Candidate drone models, tried in order; the first one the game has wins
+// (the log lists which exist). Override with [Drone] Model= in GTAVE.FPV.ini.
+// Prop names from DurtyFree's gta-v-data-dumps ObjectList; the Terrorbyte
+// drone comes first. "rcdrone" is not in that dump: maybe a newer vehicle.
 const char *const kPropCandidates[] = {
-    "ba_prop_battle_drone_quad", "ba_prop_battle_drone_hornet", "ch_prop_casino_drone_02a",
-    "ch_prop_casino_drone_01a",  "xs_prop_arena_drone_01a",     "reh_prop_reh_drone_02a",
-    "sf_prop_sf_drone_01a",      "h4_prop_h4_drone_01a",
+    "ba_prop_battle_drone_quad", "rcdrone",                  "ch_prop_arcade_drone_01a",
+    "ba_prop_battle_drone_hornet", "ch_prop_casino_drone_02a", "xs_prop_arena_drone_01",
+    "reh_prop_reh_drone_02a",
 };
 
 std::string ini_path() {
@@ -120,19 +120,25 @@ void spawn_prop(const float pos[3]) {
         fpvlog::write("drone model %08x did not load", model);
         return;
     }
-    g_prop = shv::call<int>(nat::CREATE_OBJECT_NO_OFFSET, model, pos[0], pos[1], pos[2], false, false, false, 0);
+    // Vehicle models (RC vehicles) cannot be spawned as objects.
+    const bool vehicle = shv::call<bool>(nat::IS_MODEL_A_VEHICLE, model);
+    g_prop = vehicle ? shv::call<int>(nat::CREATE_VEHICLE, model, pos[0], pos[1], pos[2], 0.0f, false, false, false)
+                     : shv::call<int>(nat::CREATE_OBJECT_NO_OFFSET, model, pos[0], pos[1], pos[2], false, false, false, 0);
     shv::call(nat::SET_MODEL_AS_NO_LONGER_NEEDED, model);
     if (!g_prop) return;
     shv::call(nat::SET_ENTITY_COLLISION, g_prop, false, false);
     shv::call(nat::FREEZE_ENTITY_POSITION, g_prop, true);  // libfpv moves it, not GTA's physics
-    fpvlog::write("drone model %08x spawned as %d (yaw offset %.0f)", model, g_prop, yaw_offset);
+    shv::call(nat::SET_ENTITY_INVINCIBLE, g_prop, true, false);
+    if (vehicle) shv::call(nat::SET_VEHICLE_ENGINE_ON, g_prop, false, true, true);
+    fpvlog::write("drone model %08x spawned as %s %d (yaw offset %.0f)", model, vehicle ? "vehicle" : "object",
+                  g_prop, yaw_offset);
 }
 
 void delete_prop() {
     if (!g_prop) return;
     if (shv::call<bool>(nat::DOES_ENTITY_EXIST, g_prop)) {
         shv::call(nat::SET_ENTITY_AS_MISSION_ENTITY, g_prop, true, true);
-        shv::call(nat::DELETE_OBJECT, &g_prop);
+        shv::call(nat::DELETE_ENTITY, &g_prop);  // objects and vehicles alike
     }
     g_prop = 0;
 }
