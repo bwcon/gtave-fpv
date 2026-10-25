@@ -113,9 +113,9 @@ with Betaflight use MSP DisplayPort on a 53x20 HD canvas.
 
 ## Phase 6: GTA world telemetry in the OSD
 
-The game data goes into the Betaflight OSD. Telemetry on the radio screen
-needs new hardware (see the backlog), because a stock sim dongle such as the
-FrSky XSR-SIM only sends its own RSSI and RxBt back to the radio.
+The game data goes into the Betaflight OSD. A stock sim dongle such as the
+FrSky XSR-SIM only sends its own RSSI and RxBt back to the radio. Telemetry
+on the radio screen therefore needs new hardware (see the backlog).
 
 1. Area name: `GET_NAME_OF_ZONE` gives the zone code, and `GET_LABEL_TEXT`
    gives its display name ("Vinewood Hills", "Mount Chiliad"). Show it in a
@@ -132,7 +132,7 @@ FrSky XSR-SIM only sends its own RSSI and RxBt back to the radio.
 
 ## Backlog (after the base mod works fully)
 
-Shelved on 2026-10-25. Start these only when Phases 2 to 5 are done.
+Shelved on 2026-10-25. When Phases 2 to 5 are done, start these.
 
 1. Custom OSD fonts. Load `.mcm` files (the Betaflight Configurator format)
    and PNG glyph sheets (the DJI O3, WTFOS and Walksnail format) from
@@ -156,5 +156,5 @@ Shelved on 2026-10-25. Start these only when Phases 2 to 5 are done.
    - A trainer-port cable into the XSR-SIM. This gives wired sticks, but the
      trainer signal is one-way, so it adds no telemetry.
    - Custom XSR-SIM firmware. Hardest: the board is undocumented, flashing
-     may need SWD pads, and the FrSky ACCST D16 receiver side must be
+     can need SWD pads, and the FrSky ACCST D16 receiver side must be
      reimplemented.
