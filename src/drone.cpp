@@ -12,6 +12,7 @@
 #include "fpvapi.h"
 #include "log.h"
 #include "natives.h"
+#include "radio.h"
 #include "shv.h"
 #include "world.h"
 
@@ -57,9 +58,11 @@ float g_prop_yaw[4] = {0, 0, 0, 1};  // model-to-drone yaw correction (GTAVE.FPV
 // Candidate drone props, tried in order; the first one the game has wins.
 // ponytail: names unverified, the log lists which exist. Override with
 // [Drone] Model= in GTAVE.FPV.ini.
+// The Terrorbyte drone (After Hours, "ba_" props) comes first.
 const char *const kPropCandidates[] = {
-    "ch_prop_casino_drone_02a", "ch_prop_casino_drone_01a", "xs_prop_arena_drone_01a",
-    "reh_prop_reh_drone_02a",   "sf_prop_sf_drone_01a",     "h4_prop_h4_drone_01a",
+    "ba_prop_battle_drone_quad", "ba_prop_battle_drone_hornet", "ch_prop_casino_drone_02a",
+    "ch_prop_casino_drone_01a",  "xs_prop_arena_drone_01a",     "reh_prop_reh_drone_02a",
+    "sf_prop_sf_drone_01a",      "h4_prop_h4_drone_01a",
 };
 
 std::string ini_path() {
@@ -314,6 +317,7 @@ void start() {
     g_first_sim_time = -1;
     g_view = View::Fpv;
     audio::start();
+    radio::start();
     fpv.fpv_overlay_set_action(kMovePlayerAction, "Move player here (Y)");
 
     fpv_input_status st{};
@@ -327,6 +331,7 @@ void start() {
 void stop() {
     fpv.fpv_overlay_set_action(kMovePlayerAction, nullptr);
     audio::stop();  // before the drone: the audio thread reads libfpv's synth
+    radio::stop();
     if (g_cam) {
         shv::call(nat::RENDER_SCRIPT_CAMS, false, false, 0, true, false, 0);
         shv::call(nat::SET_CAM_ACTIVE, g_cam, false);
@@ -447,6 +452,7 @@ void tick() {
         stop();
         return;
     }
+    radio::tick(!fpv.fpv_overlay_wants_input());
     if (!fpv.fpv_overlay_wants_input()) {  // otherwise the keys belong to the overlay
         if (key_pressed('C')) g_view = View((int(g_view) + 1) % int(View::Count));
         if (key_pressed('R')) respawn();

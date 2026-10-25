@@ -85,8 +85,11 @@ rates, OSD layout), so that no settings live in a second interface.
 3. Video look for each mode: analog noise and breakup, or digital freeze and
    pixelation.
 4. Turn off DLSS frame generation while flying, because it adds latency.
-5. A custom drone model in an onigiri dlcpack, so that it can change without an
-   RPF repack.
+5. A real FPV quad model instead of a DJI-style game prop. The code is done:
+   `[Drone] Model=` in `GTAVE.FPV.ini` takes any prop name. The work is the
+   asset: a 5-inch quad model (made in Blender, or a free licensed model),
+   exported to `.ydr` and `.ytyp` with the Sollumz add-on, packed as an onigiri
+   dlcpack like the car packs. Set `YawOffset` if the model faces sideways.
 
 ## Phase 4: collision extras
 
