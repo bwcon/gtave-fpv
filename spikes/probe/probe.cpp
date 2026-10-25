@@ -116,7 +116,9 @@ void log_burst_cost() {
                   kRays, hits, us, us / kRays);
 }
 
-// Runs on ReShade's render thread every frame, overlay open or closed.
+// reshade_overlay event: runs on ReShade's render thread every frame, menu open
+// or closed. (register_overlay with a null title would only draw inside the
+// Add-ons tab, as the add-on's settings panel.)
 void draw_overlay(reshade::api::effect_runtime *) {
     shv::Vec3 p, end, normal;
     int status, hit, type;
@@ -155,7 +157,7 @@ void draw_overlay(reshade::api::effect_runtime *) {
 // fiber registers once ReShade is in the process.
 void try_register_addon() {
     if (g_addon || !reshade::register_addon(g_module)) return;
-    reshade::register_overlay(nullptr, &draw_overlay);
+    reshade::register_event<reshade::addon_event::reshade_overlay>(&draw_overlay);
     g_addon = true;
     fpvlog::write("registered with ReShade as an add-on (API %d)", RESHADE_API_VERSION);
 }
@@ -190,7 +192,7 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved) {
     } else if (reason == DLL_PROCESS_DETACH && reserved == nullptr) {
         // Only on a real unload. At process exit ReShade may already be gone.
         if (g_addon) {
-            reshade::unregister_overlay(nullptr, &draw_overlay);
+            reshade::unregister_event<reshade::addon_event::reshade_overlay>(&draw_overlay);
             reshade::unregister_addon(instance);
         }
         shv::unregister_script(instance);
