@@ -108,7 +108,22 @@ with Betaflight use MSP DisplayPort on a 53x20 HD canvas.
 1. In bwcon/libfpv, make the OSD grid size follow the Betaflight video system.
 2. Turn on the HD canvas (`vcd_video_system = HD`) in the embedded Betaflight
    build.
-3. Add an HD OSD font atlas.
+3. Custom OSD fonts, loaded from the same files that go on the goggles' SD
+   card, without changes. Each package keeps its own folder in
+   `%APPDATA%\libfpv\fonts`, and the overlay lists them.
+   - WTFOS (msp-osd) fonts: `font_bf.bin`, `font_bf_2.bin`,
+     `font_bf_hd.bin`, `font_bf_hd_2.bin`. These are raw RGBA with no header,
+     256 glyphs per file, and the `_2` file holds glyphs 256 to 511. The SD
+     glyphs are 36x54 px (1,990,656 bytes per file). The HD glyphs are
+     24x36 px (884,736 bytes per file).
+   - DJI O3 native fonts: PNG sheets such as `BTFL_CLASH_SD.png`,
+     `BTFL_CLASH_HD.png` and `BTFL_CLASH_O3.png`. Decode them with
+     `stb_image`. Make sure of the glyph layout from Ben's files first:
+     `BTFL_CLASH_HD.png` is 96x9216.
+   - Use the HD files on the 53x20 canvas and the SD files on 30x16. Color
+     fonts keep their colors, because libfpv draws fonts as RGBA textures.
+   - Ben's fonts: `a personal folder`. His favourites are the SNEAKY_FPV O3 sets (Blinder,
+     Clash, Conthrax, Europa, Nexus, in BTFL and ARDU variants).
 4. Offer the change upstream to hammerill/libfpv.
 
 ## Phase 6: GTA world telemetry in the OSD
@@ -134,18 +149,10 @@ on the radio screen therefore needs new hardware (see the backlog).
 
 Shelved on 2026-10-25. When Phases 2 to 5 are done, start these.
 
-1. Custom OSD fonts. Load `.mcm` files (the Betaflight Configurator format)
-   and PNG glyph sheets (the DJI O3, WTFOS and Walksnail format) from
-   `%APPDATA%\libfpv\fonts`, and pick one in the overlay. Ben's fonts are in
-   `a personal folder`.
-   His favourites are the SNEAKY_FPV O3 fonts (Blinder, Clash, Conthrax,
-   Europa, Nexus, in BTFL and ARDU variants). Each has `_SD`, `_HD` and `_O3`
-   PNG sheets, for example `BTFL_CLASH_HD.png` at 96x9216. The HD sheets
-   belong with the 53x20 canvas of Phase 5.
-2. Live font uploads from the Betaflight Configurator Font Manager: catch
+1. Live font uploads from the Betaflight Configurator Font Manager: catch
    `MSP_OSD_CHAR_WRITE` (Betaflight `msp.c`) and save the font. Do this after
-   the Betaflight 2026.6 upgrade.
-3. Telemetry on the radio screen. A stock FrSky XSR-SIM has no path from the
+   the Betaflight 2026.6 upgrade. Goggle font files are part of Phase 5.
+2. Telemetry on the radio screen. A stock FrSky XSR-SIM has no path from the
    PC to the radio. Options:
    - A Raspberry Pi Pico between the PC and a FrSky receiver with SBUS and
      SmartPort: a USB joystick plus cached SmartPort sensors fed by the mod
