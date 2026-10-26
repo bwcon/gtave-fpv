@@ -79,7 +79,8 @@ void draw_status() {
     } else {
         ImGui::Text("Input: %s%s", s.device[0] ? s.device : "keyboard", s.needs_setup ? " (needs setup)" : "");
     }
-    ImGui::TextUnformatted("F9 launch / land   C camera   R respawn   Y move player here   O OSD analog / HD");
+    ImGui::TextUnformatted("F9 launch / land   C camera   R respawn   Y move player here   O OSD analog / HD   G goggles");
+    ImGui::TextUnformatted("Races: N record / save   M or AUX3 mark gate   U undo   L next race / off");
     ImGui::Separator();
 }
 

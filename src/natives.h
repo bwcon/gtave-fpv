@@ -67,6 +67,9 @@ constexpr uint64_t SET_RADIO_TO_STATION_INDEX = 0xA619B168B8A8570F;
 constexpr uint64_t SET_RADIO_TO_STATION_NAME = 0xC69EDA28699D5107;            // "OFF" = off
 constexpr uint64_t GET_FILENAME_FOR_AUDIO_CONVERSATION = 0x7B5280EBA9840C72;  // label -> text
 
+// (type, pos xyz, dir xyz, rot xyz, scale xyz, r, g, b, a, bob, faceCamera, rotOrder, rotate, txd, txn, onEntities)
+constexpr uint64_t DRAW_MARKER = 0x28477EC23D892089;
+
 constexpr uint64_t START_EXPENSIVE_SYNCHRONOUS_SHAPE_TEST_LOS_PROBE = 0x377906D8A31E5586;
 constexpr uint64_t GET_SHAPE_TEST_RESULT = 0x3D87450E15D98694;
 

@@ -21,8 +21,9 @@ hammerill from GTA IV to GTA V Enhanced. It uses a fork of libfpv,
 - Three cameras: FPV (the goggles view), chase, and line of sight from where
   the player stands.
 - Betaflight OSD in two styles: the analog 30x16 canvas, or the DJI-style HD
-  53x20 canvas. The HD style adds a goggles HUD with signal bars, bitrate,
-  latency and a recording dot.
+  53x20 canvas. A goggles HUD shows signal bars, the flight timer and a
+  recording dot. It adds bitrate and latency in the HD style, and the video
+  channel in the analog style.
 - Goggle fonts: copy the font folders from your goggles' SD card (DJI O3 PNG
   sheets or WTFOS `.bin` fonts) and pick one in the OSD settings.
 - Goggles view: a fisheye lens, a goggles bezel around the picture, and a
@@ -39,6 +40,8 @@ hammerill from GTA IV to GTA V Enhanced. It uses a fork of libfpv,
   seconds after you disarm.
 - Move the player here: ends the flight with the player standing where the
   drone is.
+- Checkpoint races: record gates in flight with a radio switch, then fly
+  timed laps through them.
 
 ## Controls
 
@@ -51,6 +54,10 @@ hammerill from GTA IV to GTA V Enhanced. It uses a fork of libfpv,
 | O | Switch the OSD style: analog or HD |
 | G | Show or hide the goggles bezel |
 | `,` and `.` | Previous or next radio station |
+| N | Start recording a race, or save the recorded race |
+| M | Mark a gate while recording (the AUX3 switch does the same) |
+| U | Remove the last gate while recording |
+| L | Load the next saved race, or turn races off |
 
 All libfpv settings (radio setup, rates, OSD layout, fonts, camera and quad)
 are in the ReShade overlay. Press Home, open the Add-ons page, and open the
@@ -83,6 +90,10 @@ works too.
 
 Turn off DLSS frame generation for FPV flying. Frame generation adds input
 latency, and no script function can switch it off.
+
+The mod was tested together with the RenoDX DLSS 5 mods and the NVE
+(NaturalVision Enhanced) mod. Keep the "GTAVE.FPV lens" effect last in
+ReShade's effect list, after the NVE effects.
 
 ## Installing
 
@@ -130,6 +141,30 @@ The mod uses these files:
 - `GTAVE.FPV.ini` in the game folder: the drone model, the bezel opening and
   the DVR mode. Set `[DVR] Mode=off` to turn off the ShadowPlay recording.
 - `GTAVE.FPV.log` in the game folder: the mod log.
+
+## Checkpoint races
+
+A race is a loop of gates. The first gate is the start and finish line.
+
+1. Fly to where the start line should be, and press N to start recording.
+2. Fly the course. At each gate position, flick the AUX3 switch (the beeper
+   switch) or press M. The gate faces the way the drone flies at that moment.
+3. If a gate is in the wrong place, press U to remove it.
+4. Press N to save the race. The race needs two gates or more.
+5. Fly through the green gate to start the clock. The next gate is yellow.
+   Each lap ends at the start gate, and the HUD shows the lap, the last lap
+   time and the best lap time.
+
+Races are saved as text files in the `races` folder in the game folder, one
+gate per line. You can share them or edit them by hand. Press L to load the
+next saved race, and press R to restart the lap from the start gate.
+
+Race settings in `GTAVE.FPV.ini`, section `[Race]`:
+
+- `MarkSwitch`: the AUX number of the gate mark switch (default 3).
+- `GateRadius`: the gate radius in metres (default 2.0).
+- `MarkerYaw`: degrees added to the drawn rings' rotation, if the rings do
+  not face along the course.
 
 ## Tune it in Betaflight Configurator
 

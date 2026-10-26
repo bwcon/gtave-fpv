@@ -14,6 +14,7 @@
 #include "lens.h"
 #include "log.h"
 #include "natives.h"
+#include "race.h"
 #include "radio.h"
 #include "render.h"
 #include "shv.h"
@@ -443,6 +444,7 @@ void respawn() {
     fpv.fpv_drone_repair(g_drone);
     fpv.fpv_drone_reset(g_drone, g_spawn_pos, g_spawn_rot);
     g_first_sim_time = -1;
+    race::restart();
 }
 
 }  // namespace
@@ -583,6 +585,7 @@ void tick() {
     const bool fpv_view = g_view == View::Fpv;
     apply_camera(fpv_view ? frame.camera : g_view == View::Chase ? frame.chase_camera : frame.los_camera, fpv_view);
     update_prop(frame, fpv_view);
+    race::tick(frame, !fpv.fpv_overlay_wants_input());
     publish_osd(&frame, fpv_view);
     dvr::tick((frame.flags & FPV_DRONE_ARMED) != 0);
     publish_status(true);

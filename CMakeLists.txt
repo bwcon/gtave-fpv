@@ -29,6 +29,7 @@ add_library(gtave_fpv_core SHARED
   src/lens.cpp
   src/world.cpp
   src/osd.cpp
+  src/race.cpp
   src/radio.cpp
   src/render.cpp
   src/tab.cpp

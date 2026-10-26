@@ -6,6 +6,7 @@
 #include "drone.h"
 #include "dvr.h"
 #include "fpvapi.h"
+#include "race.h"
 #include "radio.h"
 
 namespace osd {
@@ -29,10 +30,11 @@ void draw_radio_notice(ImDrawList *dl, const render::Rect &r) {
     dl->AddText(ImVec2(cx - half, y), kWhite, s, nullptr);
 }
 
-// The DJI goggles' own status bar over the Betaflight OSD: link signal,
-// bitrate and latency on the left, recording dot and timer on the right.
+// The goggles' own status bar over the Betaflight OSD: link signal on the
+// left with bitrate and latency (DJI, HD) or the video channel (analog), and
+// the recording dot and timer on the right.
 // ponytail: bitrate and latency are derived from libfpv's signal and noise, not a link model.
-void draw_goggles_hud(ImDrawList *dl, const render::Rect &r, const fpv_frame &f) {
+void draw_goggles_hud(ImDrawList *dl, const render::Rect &r, const fpv_frame &f, bool hd) {
     const float size = r.h() * 0.026f, top = r.y0 + r.h() * 0.015f, side = r.w() * 0.02f;
     const float signal = f.video.signal_strength, noise = f.video.noise;
 
@@ -46,7 +48,8 @@ void draw_goggles_hud(ImDrawList *dl, const render::Rect &r, const fpv_frame &f)
     char s[64];
     float mbps = lit ? 50.0f * signal * (1.0f - 0.6f * noise) : 0.0f;
     int ms = lit ? int(24.0f + 60.0f * noise) : 0;
-    std::snprintf(s, sizeof s, "%.1fMbps  %dms", mbps, ms);
+    if (hd) std::snprintf(s, sizeof s, "%.1fMbps  %dms", mbps, ms);
+    else std::snprintf(s, sizeof s, "R1 5658MHz");  // raceband 1, the usual analog channel
     text(dl, size, ImVec2(r.x0 + side + size * 1.5f, top), kWhite, s);
 
     // Recording dot (blinking while the DVR records) and the flight timer.
@@ -57,6 +60,17 @@ void draw_goggles_hud(ImDrawList *dl, const render::Rect &r, const fpv_frame &f)
     if (dvr::recording() && secs % 2 == 0)
         dl->AddCircleFilled(ImVec2(right - size * 0.6f, top + size * 0.5f), size * 0.28f, IM_COL32(230, 40, 40, 255), 16);
     text(dl, size, ImVec2(right, top), kWhite, s);
+}
+
+// Lap, gate and times, top centre of the picture.
+void draw_race(ImDrawList *dl, const render::Rect &r) {
+    char s[160];
+    if (!race::hud(s, sizeof s)) return;
+    const float size = r.h() * 0.03f;
+    // ponytail: approximate centring, as in draw_radio_notice
+    float half = float(std::strlen(s)) * size * 0.26f, cx = (r.x0 + r.x1) * 0.5f, y = r.y0 + r.h() * 0.12f;
+    dl->AddRectFilled(ImVec2(cx - half - 12, y - 6), ImVec2(cx + half + 12, y + size + 6), IM_COL32(0, 0, 0, 120), 6.0f, 0);
+    text(dl, size, ImVec2(cx - half, y), kWhite, s);
 }
 
 }  // namespace
@@ -75,7 +89,8 @@ void draw(reshade::api::effect_runtime *runtime) {
     using fpvapi::fpv;
     // libfpv centres the grid at 4:3 (analog) or 16:9 (HD) inside the picture.
     render::draw(dl, fpv.fpv_osd_draw_data(&frame, r.w(), r.h(), style), ImVec2(r.x0, r.y0), runtime);
-    if (style == FPV_OSD_STYLE_HD) draw_goggles_hud(dl, r, frame);
+    draw_goggles_hud(dl, r, frame, style == FPV_OSD_STYLE_HD);
+    draw_race(dl, r);
 }
 
 }  // namespace osd
