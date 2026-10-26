@@ -16,16 +16,20 @@ namespace {
 constexpr int kHat = 0, kGlasses = 1;  // ped prop slots
 constexpr int kAnimLoopUpperBody = 1 | 16 | 32;  // loop, upper body only, the player can still be moved
 
-// The radio's holds. The tourist reading a map keeps both hands on it; the
-// tablet reader holds it in the left hand and swipes with the right.
+// The radio's holds. The texter keeps both hands on the phone, thumbs moving;
+// the tourist holds a map in both hands; the tablet reader holds it in the left
+// hand and swipes with the right.
 struct Pose {
     const char *key, *label, *dict, *anim;
     int bone;  // ped bone id
     Placement fallback;
 };
 const Pose kPoses[] = {
+    {"texting", "Both hands, thumbs (texting)", "amb@world_human_stand_mobile@male@text@base", "base",
+     28422,  // PH_R_Hand
+     {true, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}}},
     {"map", "Both hands (reading a map)", "amb@world_human_tourist_map@male@base", "base", 28422,  // PH_R_Hand
-     {true, {0.0f, -0.03f, 0.0f}, {20.0f, -90.0f, 0.0f}}},
+     {true, {0.041f, -0.002f, 0.021f}, {20.0f, 0.0f, 0.0f}}},
     {"tablet", "Left hand, right hand swiping (tablet)", "amb@code_human_in_bus_passenger_idles@female@tablet@base",
      "base", 60309,  // PH_L_Hand
      {true, {0.0f, -0.009f, 0.02f}, {0.0f, 90.0f, -40.0f}}},
@@ -51,6 +55,9 @@ int g_object[ItemCount] = {};
 bool g_missing[ItemCount] = {};  // not installed: do not look again every tick
 int g_pose = 0;                  // kPoses index
 int g_holding = -1;              // the pose whose animation runs, -1 none
+DWORD g_hold_started = 0;        // when it was last started (GetTickCount)
+int g_hold_waits = 0;            // ticks its dictionary has been loading
+bool g_hold_reported = false;    // the log already has this pose's trouble
 struct Saved {
     int drawable = -1, texture = 0;
 } g_saved[2];  // the hat and glasses taken off for the flight
@@ -159,14 +166,33 @@ void hold(int ped, bool on) {
         shv::call(nat::STOP_ANIM_TASK, ped, kPoses[g_holding].dict, kPoses[g_holding].anim, 2.0f);
         g_holding = -1;
     }
-    if (pose < 0) return;
+    if (pose < 0) {
+        g_hold_waits = 0;
+        g_hold_reported = false;
+        return;
+    }
     const Pose &p = kPoses[pose];
     shv::call(nat::REQUEST_ANIM_DICT, p.dict);
-    if (!shv::call<bool>(nat::HAS_ANIM_DICT_LOADED, p.dict)) return;  // next tick
-    if (!shv::call<bool>(nat::IS_ENTITY_PLAYING_ANIM, ped, p.dict, p.anim, 3))
-        shv::call(nat::TASK_PLAY_ANIM, ped, p.dict, p.anim, 4.0f, -4.0f, -1, kAnimLoopUpperBody, 0.0f, false, false,
-                  false);
+    if (!shv::call<bool>(nat::HAS_ANIM_DICT_LOADED, p.dict)) {
+        if (++g_hold_waits == 300 && !g_hold_reported) {
+            g_hold_reported = true;
+            fpvlog::write("gear: hold %s: animation %s did not load", p.key, p.dict);
+        }
+        return;  // next tick
+    }
+    // Start it once; start it again only when it has been off for a second
+    // (restarting every tick would freeze it in its first frame).
+    const DWORD now = GetTickCount();
+    if (g_holding == pose && shv::call<bool>(nat::IS_ENTITY_PLAYING_ANIM, ped, p.dict, p.anim, 3)) return;
+    if (g_holding == pose && now - g_hold_started < 1000) return;
+    if (g_holding == pose && !g_hold_reported) {
+        g_hold_reported = true;
+        fpvlog::write("gear: hold %s: %s/%s did not keep playing, starting it again", p.key, p.dict, p.anim);
+    }
+    shv::call(nat::TASK_PLAY_ANIM, ped, p.dict, p.anim, 4.0f, -4.0f, -1, kAnimLoopUpperBody, 0.0f, false, false, false);
+    if (g_holding != pose) fpvlog::write("gear: hold %s: %s/%s", p.key, p.dict, p.anim);
     g_holding = pose;
+    g_hold_started = now;
 }
 
 }  // namespace

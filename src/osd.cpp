@@ -1,7 +1,11 @@
 #include "osd.h"
 
+#include <windows.h>
+
+#include <atomic>
 #include <cstdio>
 #include <cstring>
+#include <string>
 
 #include "drone.h"
 #include "dvr.h"
@@ -73,7 +77,52 @@ void draw_race(ImDrawList *dl, const render::Rect &r) {
     text(dl, size, ImVec2(cx - half, y), kWhite, s);
 }
 
+std::atomic<int> g_sticks{-1};  // [View] StickOverlay, -1: not read yet
+
+std::string ini_path() {
+    char path[MAX_PATH];
+    DWORD n = GetModuleFileNameA(nullptr, path, MAX_PATH);
+    std::string dir(path, n);
+    return dir.substr(0, dir.find_last_of("\\/")) + "\\GTAVE.FPV.ini";
+}
+
+// The sticks, mode 2: throttle and yaw on the left, pitch and roll on the
+// right, each a box with a dot, bottom centre of the picture.
+void draw_sticks(ImDrawList *dl, const render::Rect &r, const fpv_frame &f) {
+    const float box = r.h() * 0.11f, gap = box * 0.5f, y0 = r.y1 - box - r.h() * 0.05f;
+    const float cx = (r.x0 + r.x1) * 0.5f;
+    struct Stick {
+        float x0, h, v;  // left edge, horizontal and vertical channel (-1..1)
+    } const sticks[2] = {
+        {cx - gap * 0.5f - box, f.channels[3], f.channels[2]},  // yaw, throttle
+        {cx + gap * 0.5f, f.channels[0], f.channels[1]},        // roll, pitch
+    };
+    for (const Stick &s : sticks) {
+        const ImVec2 a(s.x0, y0), b(s.x0 + box, y0 + box), c(s.x0 + box * 0.5f, y0 + box * 0.5f);
+        dl->AddRectFilled(a, b, IM_COL32(0, 0, 0, 90), box * 0.08f, 0);
+        dl->AddRect(a, b, IM_COL32(255, 255, 255, 150), box * 0.08f, 0, 1.5f);
+        dl->AddLine(ImVec2(c.x, a.y + 3), ImVec2(c.x, b.y - 3), IM_COL32(255, 255, 255, 50), 1.0f);
+        dl->AddLine(ImVec2(a.x + 3, c.y), ImVec2(b.x - 3, c.y), IM_COL32(255, 255, 255, 50), 1.0f);
+        auto clamp = [](float v) { return v < -1 ? -1.0f : v > 1 ? 1.0f : v; };
+        const float reach = box * 0.42f;
+        const ImVec2 dot(c.x + clamp(s.h) * reach, c.y - clamp(s.v) * reach);
+        dl->AddLine(c, dot, IM_COL32(255, 255, 255, 120), 2.0f);
+        dl->AddCircleFilled(dot, box * 0.07f, IM_COL32(0, 0, 0, 160), 16);
+        dl->AddCircleFilled(dot, box * 0.055f, kWhite, 16);
+    }
+}
+
 }  // namespace
+
+bool stick_overlay() {
+    if (g_sticks < 0) g_sticks = GetPrivateProfileIntA("View", "StickOverlay", 0, ini_path().c_str()) != 0;
+    return g_sticks == 1;
+}
+
+void set_stick_overlay(bool on) {
+    g_sticks = on ? 1 : 0;
+    WritePrivateProfileStringA("View", "StickOverlay", on ? "1" : "0", ini_path().c_str());
+}
 
 void draw(reshade::api::effect_runtime *runtime) {
     if (!fpvapi::loaded()) return;
@@ -90,6 +139,7 @@ void draw(reshade::api::effect_runtime *runtime) {
     // libfpv centres the grid at 4:3 (analog) or 16:9 (HD) inside the picture.
     render::draw(dl, fpv.fpv_osd_draw_data(&frame, r.w(), r.h(), style), ImVec2(r.x0, r.y0), runtime);
     draw_goggles_hud(dl, r, frame, style == FPV_OSD_STYLE_HD);
+    if (stick_overlay()) draw_sticks(dl, r, frame);
     draw_race(dl, r);
 }
 

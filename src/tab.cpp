@@ -4,6 +4,7 @@
 
 #include "drone.h"
 #include "gear.h"
+#include "osd.h"
 #include "fpvapi.h"
 #include "log.h"
 #include "render.h"
@@ -88,6 +89,8 @@ void draw_status() {
     bool repair = drone::option(drone::RepairOnArm);
     if (ImGui::Checkbox("Repair on arm: new props, motors and a full battery every time you arm", &repair))
         drone::set_option(drone::RepairOnArm, repair);
+    bool sticks = osd::stick_overlay();
+    if (ImGui::Checkbox("Stick overlay in the goggles view (mode 2)", &sticks)) osd::set_stick_overlay(sticks);
     // The pilot's gear: live while flying, saved when a slider is let go.
     for (int i = 0; i < gear::ItemCount; ++i) {
         const gear::Item item = gear::Item(i);

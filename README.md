@@ -47,7 +47,9 @@ hammerill from GTA IV to GTA V Enhanced. It uses a fork of libfpv,
   drone is.
 - The player wears FPV goggles and holds a RadioMaster TX12 while flying. Any
   hat or glasses come off and go back on after. The GTAVE.FPV tab can turn
-  each one off or adjust its fit.
+  each one off, adjust its fit, and pick how the radio is held.
+- A stick overlay in the goggles view (mode 2), as in FPV videos. Turn it on
+  in the GTAVE.FPV tab.
 - Checkpoint races: record gates in flight with a radio switch, then fly
   timed laps through them.
 

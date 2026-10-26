@@ -9,4 +9,9 @@ namespace osd {
 // Render thread, every frame.
 void draw(reshade::api::effect_runtime *runtime);
 
+// [View] StickOverlay: the radio's sticks drawn at the bottom of the goggles
+// view, as in FPV videos. Any thread.
+bool stick_overlay();
+void set_stick_overlay(bool on);
+
 }  // namespace osd
