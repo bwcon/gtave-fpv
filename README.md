@@ -2,6 +2,8 @@
 
 ![GTAVE.FPV](assets/GTAVE.FPV.cover.jpg)
 
+Trailer: https://youtu.be/C_lgsiII5-w
+
 ![The FPV view](docs/fpv-view.jpg)
 
 Fly an FPV drone through Los Santos with your own radio. Press F9 and a quad
