@@ -5,6 +5,7 @@
 #include "drone.h"
 #include "gear.h"
 #include "osd.h"
+#include "race.h"
 #include "fpvapi.h"
 #include "log.h"
 #include "render.h"
@@ -82,7 +83,10 @@ void draw_status() {
         ImGui::Text("Input: %s%s", s.device[0] ? s.device : "keyboard", s.needs_setup ? " (needs setup)" : "");
     }
     ImGui::TextUnformatted("F9 launch / land   C camera   R respawn   Y move player here   O OSD analog / HD   G goggles   P new props");
-    ImGui::TextUnformatted("Races: N record / save   M or AUX3 mark gate   U undo   L next race / off");
+    ImGui::TextUnformatted("Races: N record / save   M or AUX3 mark gate   U undo   E finish here (point to point)"
+                           "   L next race / off");
+    int laps = race::laps();
+    if (ImGui::SliderInt("laps per race (0 endless)", &laps, 0, 20, "%d", 0)) race::set_laps(laps);
     bool realism = !drone::option(drone::NewPropsOnDisarm);
     if (ImGui::Checkbox("Full realism: bent props stay bent until P or R (no new props on disarm)", &realism))
         drone::set_option(drone::NewPropsOnDisarm, !realism);

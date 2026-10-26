@@ -68,6 +68,7 @@ hammerill from GTA IV to GTA V Enhanced. It uses a fork of libfpv,
 | N | Start recording a race, or save the recorded race |
 | M | Mark a gate while recording (the AUX3 switch does the same) |
 | U | Remove the last gate while recording |
+| E | Mark the finish gate and save a point to point race |
 | L | Load the next saved race, or turn races off |
 
 All libfpv settings (radio setup, rates, OSD layout, fonts, camera and quad)
@@ -176,16 +177,24 @@ The GTAVE.FPV tab has three flight options:
 
 ## Checkpoint races
 
-A race is a loop of gates. The first gate is the start and finish line.
+A race is a loop of gates (a circuit) or a line of gates from a start to a
+finish (point to point). The first gate is the start.
 
 1. Fly to where the start line should be, and press N to start recording.
 2. Fly the course. At each gate position, flick the AUX3 switch (the beeper
    switch) or press M. The gate faces the way the drone flies at that moment.
 3. If a gate is in the wrong place, press U to remove it.
-4. Press N to save the race. The race needs two gates or more.
-5. Fly through the green gate to start the clock. The next gate is yellow.
-   Each lap ends at the start gate, and the HUD shows the lap, the last lap
-   time and the best lap time.
+4. Save the race. The race needs two gates or more.
+   - For a circuit, press N. The start gate is also the finish line.
+   - For a point to point race, fly to the finish and press E. E marks the
+     finish gate there and saves the race.
+5. Fly through the green gate to start the clock. The next gate is yellow,
+   and a point to point finish gate is white.
+   - On a circuit, each lap ends at the start gate. The HUD shows the lap,
+     the last lap time and the best lap time. The race ends after the number
+     of laps in the GTAVE.FPV tab (0 is endless practice).
+   - Point to point, the clock stops at the finish gate. Fly back to the
+     green gate to go again.
 
 Races are saved as text files in the `fpv-data\races` folder in the game
 folder, one gate per line. You can share them or edit them by hand. Press L to load the
@@ -195,6 +204,8 @@ Race settings in `GTAVE.FPV.ini`, section `[Race]`:
 
 - `MarkSwitch`: the AUX number of the gate mark switch (default 3).
 - `GateRadius`: the gate radius in metres (default 2.0).
+- `Laps`: the laps in a circuit race (default 3, 0 is endless). The
+  GTAVE.FPV tab also sets it.
 - `MarkerYaw`: degrees added to the drawn rings' rotation, if the rings do
   not face along the course.
 
