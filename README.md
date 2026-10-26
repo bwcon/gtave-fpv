@@ -2,6 +2,8 @@
 
 ![GTAVE.FPV](assets/GTAVE.FPV.cover.jpg)
 
+Download: https://www.gta5-mods.com/scripts/gta-v-enhanced-fpv-drone-with-real-betaflight
+
 Trailer: https://youtu.be/C_lgsiII5-w
 
 ![The FPV view](docs/fpv-view.jpg)
