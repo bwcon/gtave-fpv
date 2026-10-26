@@ -95,6 +95,14 @@ void draw_status() {
         ImGui::PushID(gear::label(item));
         bool changed = ImGui::Checkbox(gear::label(item), &g.show);
         bool save = changed;
+        if (g.show && item == gear::Radio && ImGui::BeginCombo("hold", gear::pose_label(gear::radio_pose()), 0)) {
+            for (int k = 0; k < gear::pose_count(); ++k)
+                if (ImGui::Selectable(gear::pose_label(k), k == gear::radio_pose(), 0, ImVec2(0, 0))) {
+                    gear::set_radio_pose(k);
+                    g = gear::placement(item);  // the pose's own placement
+                }
+            ImGui::EndCombo();
+        }
         if (g.show) {
             changed |= ImGui::SliderFloat3("offset (m)", g.offset, -0.3f, 0.3f, "%.3f");
             save |= ImGui::IsItemDeactivatedAfterEdit();

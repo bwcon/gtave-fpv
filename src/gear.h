@@ -22,4 +22,11 @@ const char *label(Item item);
 Placement placement(Item item);
 void set_placement(Item item, const Placement &p, bool save);
 
+// How the player holds the radio ([Radio] Pose): each pose has its own hand
+// and default placement; choosing one resets the radio's placement to it.
+int pose_count();
+const char *pose_label(int pose);
+int radio_pose();
+void set_radio_pose(int pose);
+
 }  // namespace gear

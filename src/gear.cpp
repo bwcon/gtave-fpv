@@ -14,22 +14,34 @@ namespace gear {
 namespace {
 
 constexpr int kHat = 0, kGlasses = 1;  // ped prop slots
-// Both hands in front of the chest, as if reading a tablet: holds the radio.
-constexpr const char *kHoldDict = "amb@code_human_in_bus_passenger_idles@female@tablet@base";
-constexpr const char *kHoldAnim = "base";
 constexpr int kAnimLoopUpperBody = 1 | 16 | 32;  // loop, upper body only, the player can still be moved
+
+// The radio's holds. The tourist reading a map keeps both hands on it; the
+// tablet reader holds it in the left hand and swipes with the right.
+struct Pose {
+    const char *key, *label, *dict, *anim;
+    int bone;  // ped bone id
+    Placement fallback;
+};
+const Pose kPoses[] = {
+    {"map", "Both hands (reading a map)", "amb@world_human_tourist_map@male@base", "base", 28422,  // PH_R_Hand
+     {true, {0.0f, -0.03f, 0.0f}, {20.0f, -90.0f, 0.0f}}},
+    {"tablet", "Left hand, right hand swiping (tablet)", "amb@code_human_in_bus_passenger_idles@female@tablet@base",
+     "base", 60309,  // PH_L_Hand
+     {true, {0.0f, -0.009f, 0.02f}, {0.0f, 90.0f, -40.0f}}},
+};
+constexpr int kPoseCount = sizeof kPoses / sizeof kPoses[0];
 
 struct ItemInfo {
     const char *model, *section, *label;
     int bone;  // ped bone id
     Placement fallback;
 };
-// The placements are starting points; the tab's sliders fit them.
+// Fitted in the game with the tab's sliders. The radio's bone and placement come from its pose.
 const ItemInfo kItems[ItemCount] = {
     {"gtavefpv_goggles", "Goggles", "Pilot goggles on the player's head", 31086,  // SKEL_Head
-     {true, {0.06f, 0.04f, 0.0f}, {0.0f, 90.0f, 0.0f}}},
-    {"gtavefpv_radio", "Radio", "Radio in the player's hands", 60309,  // PH_L_Hand
-     {true, {0.03f, 0.002f, 0.0f}, {10.0f, 160.0f, 0.0f}}},
+     {true, {0.09f, 0.07f, 0.0f}, {0.0f, 90.0f, 0.0f}}},
+    {"gtavefpv_radio", "Radio", "Radio in the player's hands", 0, {}},
 };
 
 std::mutex g_mutex;  // the tab's sliders write from the render thread
@@ -37,7 +49,8 @@ Placement g_placement[ItemCount];
 bool g_read = false;
 int g_object[ItemCount] = {};
 bool g_missing[ItemCount] = {};  // not installed: do not look again every tick
-bool g_holding = false;          // the hold animation runs
+int g_pose = 0;                  // kPoses index
+int g_holding = -1;              // the pose whose animation runs, -1 none
 struct Saved {
     int drawable = -1, texture = 0;
 } g_saved[2];  // the hat and glasses taken off for the flight
@@ -59,6 +72,7 @@ void write(Item item) {
     WritePrivateProfileStringA(s, "Offset", buf, ini.c_str());
     std::snprintf(buf, sizeof buf, "%.1f,%.1f,%.1f", p.rotation[0], p.rotation[1], p.rotation[2]);
     WritePrivateProfileStringA(s, "Rotation", buf, ini.c_str());
+    if (item == Radio) WritePrivateProfileStringA(s, "Pose", kPoses[g_pose].key, ini.c_str());
 }
 
 // Under g_mutex.
@@ -70,6 +84,20 @@ void read_once() {
         const char *s = kItems[i].section;
         Placement p = kItems[i].fallback;
         char buf[96];
+        if (i == Radio) {
+            // No Pose key: an older ini, fitted for another hold; start from the pose's default.
+            GetPrivateProfileStringA(s, "Pose", "", buf, sizeof buf, ini.c_str());
+            const bool known = buf[0] != 0;
+            for (int k = 0; k < kPoseCount; ++k)
+                if (lstrcmpiA(buf, kPoses[k].key) == 0) g_pose = k;
+            p = kPoses[g_pose].fallback;
+            if (!known) {
+                p.show = GetPrivateProfileIntA(s, "Show", 1, ini.c_str()) != 0;
+                g_placement[i] = p;
+                write(Item(i));
+                continue;
+            }
+        }
         p.show = GetPrivateProfileIntA(s, "Show", 1, ini.c_str()) != 0;
         GetPrivateProfileStringA(s, "Offset", "", buf, sizeof buf, ini.c_str());
         std::sscanf(buf, "%f,%f,%f", &p.offset[0], &p.offset[1], &p.offset[2]);
@@ -124,24 +152,46 @@ void remove(Item item, int ped) {
     }
 }
 
-// The radio needs both hands on it: loop the hold while it is shown.
+// The radio needs the hands on it: loop the pose's hold while it is shown.
 void hold(int ped, bool on) {
-    if (on) {
-        shv::call(nat::REQUEST_ANIM_DICT, kHoldDict);
-        if (!shv::call<bool>(nat::HAS_ANIM_DICT_LOADED, kHoldDict)) return;  // next tick
-        if (!shv::call<bool>(nat::IS_ENTITY_PLAYING_ANIM, ped, kHoldDict, kHoldAnim, 3))
-            shv::call(nat::TASK_PLAY_ANIM, ped, kHoldDict, kHoldAnim, 4.0f, -4.0f, -1, kAnimLoopUpperBody, 0.0f, false,
-                      false, false);
-        g_holding = true;
-    } else if (g_holding) {
-        shv::call(nat::STOP_ANIM_TASK, ped, kHoldDict, kHoldAnim, 2.0f);
-        g_holding = false;
+    const int pose = on ? g_pose : -1;
+    if (g_holding >= 0 && g_holding != pose) {
+        shv::call(nat::STOP_ANIM_TASK, ped, kPoses[g_holding].dict, kPoses[g_holding].anim, 2.0f);
+        g_holding = -1;
     }
+    if (pose < 0) return;
+    const Pose &p = kPoses[pose];
+    shv::call(nat::REQUEST_ANIM_DICT, p.dict);
+    if (!shv::call<bool>(nat::HAS_ANIM_DICT_LOADED, p.dict)) return;  // next tick
+    if (!shv::call<bool>(nat::IS_ENTITY_PLAYING_ANIM, ped, p.dict, p.anim, 3))
+        shv::call(nat::TASK_PLAY_ANIM, ped, p.dict, p.anim, 4.0f, -4.0f, -1, kAnimLoopUpperBody, 0.0f, false, false,
+                  false);
+    g_holding = pose;
 }
 
 }  // namespace
 
 const char *label(Item item) { return kItems[item].label; }
+
+int pose_count() { return kPoseCount; }
+const char *pose_label(int pose) { return kPoses[pose].label; }
+
+int radio_pose() {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    read_once();
+    return g_pose;
+}
+
+void set_radio_pose(int pose) {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    read_once();
+    if (pose < 0 || pose >= kPoseCount || pose == g_pose) return;
+    g_pose = pose;
+    const bool show = g_placement[Radio].show;
+    g_placement[Radio] = kPoses[pose].fallback;
+    g_placement[Radio].show = show;
+    write(Radio);
+}
 
 Placement placement(Item item) {
     std::lock_guard<std::mutex> lock(g_mutex);
@@ -169,7 +219,8 @@ void tick(int ped) {
         }
         spawn(item, ped);
         if (!g_object[item]) continue;
-        const int bone = shv::call<int>(nat::GET_PED_BONE_INDEX, ped, kItems[item].bone);
+        const int bone_id = item == Radio ? kPoses[radio_pose()].bone : kItems[item].bone;
+        const int bone = shv::call<int>(nat::GET_PED_BONE_INDEX, ped, bone_id);
         shv::call(nat::ATTACH_ENTITY_TO_ENTITY, g_object[item], ped, bone, p.offset[0], p.offset[1], p.offset[2],
                   p.rotation[0], p.rotation[1], p.rotation[2], false, false, false, false, 2, true, 0);
     }
