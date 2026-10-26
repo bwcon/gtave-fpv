@@ -107,8 +107,10 @@ void draw(api::effect_runtime *runtime) {
     draw_status();
 
     ImVec2 avail = render::msvc_vec2(imgui_function_table_instance()->GetContentRegionAvail);
+    // Inside the Add-ons list the area is as tall as what is left of the
+    // window, often only a few lines: give libfpv's pages room, the list scrolls.
     if (avail.x < 400) avail.x = 400;
-    if (avail.y < 300) avail.y = 300;
+    if (avail.y < 640) avail.y = 640;
     const ImVec2 origin = render::msvc_vec2(imgui_function_table_instance()->GetCursorScreenPos);
     fpv.fpv_overlay_set_open(1);
     fpv.fpv_overlay_set_display(avail.x, avail.y, 1.0f);

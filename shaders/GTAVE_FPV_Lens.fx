@@ -16,7 +16,7 @@ uniform bool Goggles < ui_label = "Goggles"; ui_tooltip = "The goggles frame aro
 uniform float BezelSize < ui_type = "slider"; ui_label = "Goggles size"; ui_min = 0.6; ui_max = 1.4; ui_step = 0.01;
     ui_tooltip = "1 fills the window. Smaller shows black around the goggles; larger enlarges the picture and cuts the frame at the window edges."; > = 1.0;
 uniform float Fov < ui_type = "slider"; ui_label = "Camera FOV (vertical)"; ui_units = " deg"; ui_min = 60.0; ui_max = 150.0; ui_step = 1.0;
-    ui_tooltip = "The FPV camera's field of view. The same setting as the Camera page in the GTAVE.FPV tab."; > = 120.0;
+    ui_tooltip = "The FPV camera's field of view. The same setting as the Camera page in the GTAVE.FPV add-on settings."; > = 120.0;
 uniform int SignalLook < ui_type = "combo"; ui_label = "Video signal";
     ui_items = "Auto (follows the OSD style)\0Analog (snow, torn lines)\0Digital (blocks, freezes)\0Clean (no interference)\0";
     ui_tooltip = "How a weak link looks. Auto: analog with the analog OSD, digital with the HD OSD."; > = 0;
