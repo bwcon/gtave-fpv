@@ -19,7 +19,8 @@ hammerill from GTA IV to GTA V Enhanced. It uses a fork of libfpv,
 - Real Betaflight in the loop, with your rates, modes and tuning. Set up your
   radio once in the setup wizard. Betaflight Configurator can connect too.
 - Three cameras: FPV (the goggles view), chase, and line of sight from where
-  the player stands.
+  the player stands. The chase camera's distance, height and follow speed are
+  on the Camera page in the GTAVE.FPV tab.
 - Betaflight OSD in two styles: the analog 30x16 canvas, or the DJI-style HD
   53x20 canvas. A goggles HUD shows signal bars, the flight timer and a
   recording dot. It adds bitrate and latency in the HD style, and the video
@@ -31,7 +32,8 @@ hammerill from GTA IV to GTA V Enhanced. It uses a fork of libfpv,
   has block artifacts and freezes. The lens shader works only in the FPV view.
 - Radio signal: the OSD RSSI and RSSI dBm drop with the distance to where you
   pressed F9, and behind buildings.
-- GPS home is where the drone arms, as on a real quad.
+- GPS home is where the drone arms, as on a real quad. Betaflight's home arrow
+  and home distance OSD elements point back to it.
 - Collision with the world: buildings, the road, cars, peds and props, through
   the game's shape test probes.
 - Motor sound from the libfpv synthesizer.
