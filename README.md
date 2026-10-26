@@ -126,15 +126,22 @@ Copy these files into the game folder, next to `GTA5_Enhanced.exe`:
 | `GTAVE_FPV_Bezel.png` | `reshade-shaders\Textures` |
 | `dlcpacks\gtavefpv\dlc.rpf` | The drones (a 5" freestyle quad and a DJI Avata 2), the pilot's goggles and radio. See below. |
 
-The drone model is an add-on dlcpack. With onigiri, copy the `gtavefpv`
-folder to `onigiri\dlcpacks`, and add this line before `</Paths>` in
-`onigiri\common\data\dlclist.xml`:
+The drone model is an add-on dlcpack. Without the pack, the mod uses a small
+game prop as the drone.
 
-```
-<Item>dlcpacks:/gtavefpv/</Item>
-```
+- With onigiri (recommended, tested, and already installed with NVE): copy the `gtavefpv` folder to
+  `onigiri\dlcpacks`, and add this line before `</Paths>` in
+  `onigiri\common\data\dlclist.xml`:
 
-Without the pack, the mod uses a small game prop as the drone.
+  ```
+  <Item>dlcpacks:/gtavefpv/</Item>
+  ```
+
+- With OpenRPF or RageOpenV (not tested): copy the folder to
+  `mods\update\x64\dlcpacks`, and add the same line to
+  `mods\update\update.rpf\common\data\dlclist.xml`. Back up that archive
+  first, and edit only that one file in it: rebuilding `update.rpf` caused
+  errors with other add-on packs. `docs/INSTALL.md` has the full steps.
 
 Then do these steps:
 

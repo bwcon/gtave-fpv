@@ -28,16 +28,43 @@ reshade-shaders\Shaders\GTAVE_FPV_Lens.fx
 reshade-shaders\Textures\GTAVE_FPV_Bezel.png
 ```
 
-The drone and the pilot's goggles and radio are the `dlcpacks\gtavefpv` folder in this ZIP. With
-onigiri, copy that folder to `onigiri\dlcpacks`, and add this line before
-`</Paths>` in `onigiri\common\data\dlclist.xml`:
+The drone and the pilot's goggles and radio are the `dlcpacks\gtavefpv` folder
+in this ZIP. Install it in one of two ways. Without it, the mod uses a small
+game prop as the drone.
+
+### With onigiri (recommended, tested)
+
+onigiri loads add-on packs from loose folders, so no game archive changes.
+NaturalVision Enhanced (NVE) uses onigiri too. If you have NVE, you already
+have onigiri.
+
+1. Copy the `gtavefpv` folder to `onigiri\dlcpacks`.
+2. Add this line before `</Paths>` in `onigiri\common\data\dlclist.xml`:
 
 ```
 <Item>dlcpacks:/gtavefpv/</Item>
 ```
 
-Without it, the mod uses a small game prop as the drone. The models are CC BY
-4.0. `dlcpacks\gtavefpv\CREDITS.txt` names their authors.
+### With OpenRPF (or RageOpenV), not tested
+
+This route edits the copy of `update.rpf` in the `mods` folder. The mod author
+uses onigiri, because NVE uses it, and because editing `update.rpf` and
+rebuilding it caused errors with other add-on packs. Back up
+`mods\update\update.rpf` before you start.
+
+1. Make sure that `OpenRPF.asi` is in the game folder, and that
+   `mods\update\update.rpf` exists. If it does not, copy `update\update.rpf`
+   from the game folder to `mods\update\`.
+2. Copy the `gtavefpv` folder to `mods\update\x64\dlcpacks`, so that the pack
+   is at `mods\update\x64\dlcpacks\gtavefpv\dlc.rpf`.
+3. In an RPF editor that supports GTA V Enhanced, open
+   `mods\update\update.rpf\common\data\dlclist.xml`. Add the same line before
+   `</Paths>`, and save the file back into the archive. Do not rebuild or
+   repack the whole archive.
+
+To uninstall, remove the line and the `gtavefpv` folder.
+
+The models are CC BY 4.0. `dlcpacks\gtavefpv\CREDITS.txt` names their authors.
 
 ## 3. Turn on the lens effect
 
