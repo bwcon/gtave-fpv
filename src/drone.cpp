@@ -503,6 +503,7 @@ void stop() {
     shv::call(nat::CLEAR_FOCUS);
     delete_prop();
     gear::stop(g_ped);
+    race::stop();
     publish_osd(nullptr, false);
     hold_player(false);
     if (g_drone) {
@@ -569,6 +570,11 @@ bool osd_frame(fpv_frame *out) {
     if (!g_osd_visible) return false;
     *out = g_osd_frame;
     return true;
+}
+
+uint32_t prop_model(float yaw[4]) {
+    std::copy(g_prop_yaw, g_prop_yaw + 4, yaw);
+    return g_prop ? shv::call<uint32_t>(nat::GET_ENTITY_MODEL, g_prop) : 0;
 }
 
 double flight_seconds() {

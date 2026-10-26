@@ -1,6 +1,8 @@
 #include "tab.h"
 
 #include <atomic>
+#include <cstdio>
+#include <string>
 
 #include "drone.h"
 #include "gear.h"
@@ -74,6 +76,50 @@ void forward_input(const ImVec2 &origin, bool hovered, bool focused) {
     if (text[0]) fpv.fpv_overlay_text(text);
 }
 
+// The loaded track: its name, personal best and ghost, and sharing it as text.
+void draw_tracks() {
+    static char name[64], author[64];
+    static std::string shown_id, message;
+    static bool author_read = false;
+    if (!author_read) {
+        std::snprintf(author, sizeof author, "%s", race::author().c_str());
+        author_read = true;
+    }
+    const race::TrackInfo t = race::track();
+    if (t.loaded) {
+        if (shown_id != t.id) {  // another track: show its name
+            std::snprintf(name, sizeof name, "%s", t.name);
+            shown_id = t.id;
+        }
+        char pb[32] = "none";
+        if (t.best_lap > 0) {
+            const int m = int(t.best_lap / 60);
+            std::snprintf(pb, sizeof pb, "%d:%05.2f%s", m, t.best_lap - m * 60, t.has_ghost ? " (ghost)" : "");
+        }
+        ImGui::Text("Track %s by %s   %d gates, %s   id %s   PB %s", t.name, t.author[0] ? t.author : "?", t.gates,
+                    t.point_to_point ? "point to point" : "circuit", t.id, pb);
+        if (ImGui::InputText("track name (Enter saves)", name, sizeof name, ImGuiInputTextFlags_EnterReturnsTrue,
+                             nullptr, nullptr))
+            race::rename_track(name);
+        if (ImGui::Button("Copy track", ImVec2(0, 0)))
+            message = race::copy_track() ? "copied: paste it anywhere to share it" : "cannot copy to the clipboard";
+        ImGui::SameLine(0.0f, -1.0f);
+    } else {
+        shown_id.clear();
+        ImGui::TextUnformatted("No track loaded: L loads your saved races, N records a new one");
+    }
+    if (ImGui::Button("Paste track", ImVec2(0, 0))) message = race::paste_track();
+    if (!message.empty()) {
+        ImGui::SameLine(0.0f, -1.0f);
+        ImGui::TextUnformatted(message.c_str());
+    }
+    if (ImGui::InputText("your name on new tracks (Enter saves)", author, sizeof author,
+                         ImGuiInputTextFlags_EnterReturnsTrue, nullptr, nullptr))
+        race::set_author(author);
+    bool ghost = race::ghost();
+    if (ImGui::Checkbox("Ghost: race against your best lap", &ghost)) race::set_ghost(ghost);
+}
+
 void draw_status() {
     drone::Status s = drone::status();
     if (s.flying) {
@@ -87,6 +133,7 @@ void draw_status() {
                            "   L next race / off");
     int laps = race::laps();
     if (ImGui::SliderInt("laps per race (0 endless)", &laps, 0, 20, "%d", 0)) race::set_laps(laps);
+    draw_tracks();
     bool realism = !drone::option(drone::NewPropsOnDisarm);
     if (ImGui::Checkbox("Full realism: bent props stay bent until P or R (no new props on disarm)", &realism))
         drone::set_option(drone::NewPropsOnDisarm, !realism);

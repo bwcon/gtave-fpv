@@ -1,5 +1,7 @@
 # GTA V Enhanced FPV
 
+![GTAVE.FPV](assets/GTAVE.FPV.cover.jpg)
+
 ![The FPV view](docs/fpv-view.jpg)
 
 Fly an FPV drone through Los Santos with your own radio. Press F9 and a quad
@@ -197,13 +199,39 @@ finish (point to point). The first gate is the start.
      green gate to go again.
 
 Races are saved as text files in the `fpv-data\races` folder in the game
-folder, one gate per line. You can share them or edit them by hand. Press L to load the
+folder, one gate per line. You can share them or edit them by hand.
+
+### Sharing tracks, personal bests and ghosts
+
+The GTAVE.FPV tab shows the loaded track: its name, author, id and your
+personal best (PB).
+
+- Copy track puts the track on the clipboard as text. Paste it in a chat, a
+  forum post or a file to share it.
+- Paste track reads a track from the clipboard, saves it in `fpv-data\races`
+  and loads it. If you already have that track, it loads your copy.
+- Type a new name in "track name" and press Enter to rename the track.
+- Type your name in "your name on new tracks" and press Enter. New tracks
+  that you record carry it as the author (`[Race] Author`).
+
+Each track has an id made from its gates. A renamed copy of a track keeps its
+id, so your times stay with the course and not with the file name.
+
+- Personal bests are in `fpv-data\races\bests.txt`: the best lap (point to
+  point: the best run) and the best race for each number of laps. The HUD
+  shows PB, and NEW PB when you beat it.
+- Your best lap is also saved as a ghost in `fpv-data\races\ghosts\<id>.ghost`.
+  When you start a lap, the ghost flies the same lap as a see-through drone.
+  Turn it off in the tab or with `[Race] Ghost=0`. Share a ghost file with
+  its track to let a friend race against your lap. Press L to load the
 next saved race, and press R to restart the lap from the start gate.
 
 Race settings in `GTAVE.FPV.ini`, section `[Race]`:
 
 - `MarkSwitch`: the AUX number of the gate mark switch (default 3).
 - `GateRadius`: the gate radius in metres (default 2.0).
+- `Ghost`: race against the ghost of your best lap (default 1).
+- `Author`: your name on the tracks you record.
 - `Laps`: the laps in a circuit race (default 3, 0 is endless). The
   GTAVE.FPV tab also sets it.
 - `MarkerYaw`: degrees added to the drawn rings' rotation, if the rings do

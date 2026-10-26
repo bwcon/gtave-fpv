@@ -37,6 +37,8 @@ constexpr uint64_t SET_ENTITY_COLLISION = 0x1A9205C1B9EE827F;          // (entit
 constexpr uint64_t SET_ENTITY_COORDS_NO_OFFSET = 0x239A3351AC1DA385;   // (entity, x, y, z, bool, bool, bool)
 constexpr uint64_t SET_ENTITY_QUATERNION = 0x77B21BE7AC540F07;         // (entity, x, y, z, w)
 constexpr uint64_t SET_ENTITY_VISIBLE = 0xEA1C610A04DB6BBB;            // (entity, toggle, bool)
+constexpr uint64_t SET_ENTITY_ALPHA = 0x44A0870B7E92D7C0;              // (entity, alpha 0-255, skin)
+constexpr uint64_t GET_ENTITY_MODEL = 0x9F47B058362C84B5;              // (entity) -> model hash
 
 constexpr uint64_t CREATE_CAM = 0xC3981DCE61D9E13F;  // (name, bool)
 constexpr uint64_t SET_CAM_ACTIVE = 0x026FB97D0A425F84;

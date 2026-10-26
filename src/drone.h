@@ -3,6 +3,8 @@
 
 #include <libfpv.h>
 
+#include <cstdint>
+
 namespace drone {
 
 // Launches the drone in front of the player, or returns to the player.
@@ -34,6 +36,10 @@ Status status();
 // Copies the latest frame for the OSD; false when no drone is flying, a
 // third-person camera is on, or the pilot's OSD switch hides it. Any thread.
 bool osd_frame(fpv_frame *out);
+
+// The drone's model and the rotation added to its pose (x, y, z, w), for the
+// race ghost; 0 when no model is spawned. Script thread.
+uint32_t prop_model(float yaw[4]);
 
 // Seconds since this flight's launch, for the goggles' recording timer. Any thread.
 double flight_seconds();
