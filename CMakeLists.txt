@@ -12,7 +12,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(LIBFPV_DIR "${CMAKE_SOURCE_DIR}/../libfpv" CACHE PATH "libfpv source checkout")
 set(LIBFPV_DLL "${LIBFPV_DIR}/build/win/libfpv.dll" CACHE FILEPATH "libfpv x86_64 build")
-set(GTAVE_DIR "C:/Program Files (x86)/Steam/steamapps/common/Grand Theft Auto V Enhanced" CACHE PATH "GTA V Enhanced game folder")
+set(GTAVE_DIR "C:/Program Files (x86)/Steam/steamapps/common/Grand Theft Auto V Enhanced" CACHE PATH
+    "GTA V Enhanced game folder (set with -DGTAVE_DIR=...)")
 
 # GTAVE.FPV.asi: loader that owns the ScriptHookV script and the ReShade
 # add-on registration, and hot-reloads the core.

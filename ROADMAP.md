@@ -117,7 +117,7 @@ rates, OSD layout), so that no settings live in a second interface.
    whether a bullet passes through a gap. If it does, GTA has more detailed
    weapon bounds for that fence, and the export in item 3 can use them. If it
    does not, no collision source in the game has the gaps.
-   Result (Ben, 2026-10-25): some railings stop bullets as one solid panel.
+   Result (2026-10-25): some railings stop bullets as one solid panel.
    On the others, bullets pass through the slats too, so those railings have
    no weapon bounds at all. No game collision has the gaps, and item 3 cannot
    fix this. The only fix is hand-made collision for chosen fences.
@@ -128,7 +128,7 @@ The libfpv OSD grid is fixed at 16x30, the analog PAL canvas. DJI O3 and O4
 with Betaflight use MSP DisplayPort on a 53x20 HD canvas.
 
 Status on 2026-10-25: items 1 to 3 are done in bwcon/libfpv (commits 703f7b8
-and a2d0757). All ten of Ben's font packages load. The in-game test is open.
+and a2d0757). Ten test font packages load. The in-game test is open.
 Not done: the `_2` files (glyphs 256 to 511) and the O3 color columns for
 Betaflight's warning severities, which need the attribute byte in the fake
 display.
@@ -146,12 +146,12 @@ display.
      24x36 px (884,736 bytes per file).
    - DJI O3 native fonts: PNG sheets such as `BTFL_CLASH_SD.png`,
      `BTFL_CLASH_HD.png` and `BTFL_CLASH_O3.png`. Decode them with
-     `stb_image`. Make sure of the glyph layout from Ben's files first:
+     `stb_image`. Make sure of the glyph layout from real font files first:
      `BTFL_CLASH_HD.png` is 96x9216.
    - Use the HD files on the 53x20 canvas and the SD files on 30x16. Color
      fonts keep their colors, because libfpv draws fonts as RGBA textures.
-   - Ben's fonts: `a personal folder`. His favourites are the SNEAKY_FPV O3 sets (Blinder,
-     Clash, Conthrax, Europa, Nexus, in BTFL and ARDU variants).
+   - Test fonts: the SNEAKY_FPV O3 sets (Blinder, Clash, Conthrax, Europa,
+     Nexus, in BTFL and ARDU variants).
 4. Offer the change upstream to hammerill/libfpv.
 
 ## Phase 6: GTA world telemetry in the OSD
