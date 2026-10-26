@@ -44,6 +44,8 @@ float g_spawn_pos[3];
 float g_spawn_rot[4];
 LARGE_INTEGER g_last_tick;
 double g_first_sim_time = -1;  // sim clock at the first frame of this flight
+bool g_was_armed = false;
+bool g_props_on_disarm = true;
 fpv_frame g_frame{};
 float g_near_clip = 0, g_fov = 0;  // last values sent to the game, for the trace
 
@@ -83,6 +85,7 @@ struct DroneSettings {
     std::string model;        // [Drone] Model: empty = the candidate closest to TargetSize
     float yaw_offset = 0;     // [Drone] YawOffset, degrees
     float target_size = 0.30f;  // [Drone] TargetSize, metres across with props (a 5" quad)
+    bool props_on_disarm = true;  // [Drone] NewPropsOnDisarm: bent props are swapped when you disarm
 };
 
 std::string ini_get(const std::string &ini, const char *key, const char *fallback) {
@@ -106,6 +109,7 @@ DroneSettings read_settings() {
     s.model = value("Model", "");
     s.yaw_offset = float(std::atof(value("YawOffset", "0").c_str()));
     s.target_size = float(std::atof(value("TargetSize", "0.30").c_str()));
+    s.props_on_disarm = std::atoi(value("NewPropsOnDisarm", "1").c_str()) != 0;
     return s;
 }
 
@@ -393,6 +397,8 @@ void start() {
     fpv.fpv_world_set_raycast_callback(&world::raycast, nullptr);
     fpv.fpv_gps_set_home(nullptr);  // home is where the drone arms, as on a real quad
     spawn_prop(g_spawn_pos);
+    g_props_on_disarm = read_settings().props_on_disarm;
+    g_was_armed = false;
 
     hold_player(true);
     read_bezel_rect();
@@ -556,6 +562,7 @@ void tick() {
         if (key_pressed('R')) respawn();
         if (key_pressed('O')) fpvapi::toggle_osd_style();
         if (key_pressed('G')) lens::toggle_goggles();
+        if (key_pressed('P') && fpv.fpv_drone_replace_props) fpv.fpv_drone_replace_props(g_drone);
         if (key_pressed('Y')) {
             move_player_here();
             return;
@@ -587,7 +594,11 @@ void tick() {
     update_prop(frame, fpv_view);
     race::tick(frame, !fpv.fpv_overlay_wants_input());
     publish_osd(&frame, fpv_view);
-    dvr::tick((frame.flags & FPV_DRONE_ARMED) != 0);
+    const bool armed = (frame.flags & FPV_DRONE_ARMED) != 0;
+    dvr::tick(armed);
+    // Like walking out after a crash: new props, the same battery.
+    if (g_was_armed && !armed && g_props_on_disarm && fpv.fpv_drone_replace_props) fpv.fpv_drone_replace_props(g_drone);
+    g_was_armed = armed;
     publish_status(true);
 
     for (uint32_t i = 0; i < frame.impact_count && i < FPV_MAX_IMPACTS; ++i) {

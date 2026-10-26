@@ -53,6 +53,7 @@ hammerill from GTA IV to GTA V Enhanced. It uses a fork of libfpv,
 | Y | Move the player to the drone |
 | O | Switch the OSD style: analog or HD |
 | G | Show or hide the goggles bezel |
+| P | New propellers, where the drone is |
 | `,` and `.` | Previous or next radio station |
 | N | Start recording a race, or save the recorded race |
 | M | Mark a gate while recording (the AUX3 switch does the same) |
@@ -139,7 +140,9 @@ The mod uses these files:
   settings. The standalone libfpv app and other libfpv games share this
   folder.
 - `GTAVE.FPV.ini` in the game folder: the drone model, the bezel opening and
-  the DVR mode. Set `[DVR] Mode=off` to turn off the ShadowPlay recording.
+  the DVR mode. A crash bends the propellers. By default the mod fits new
+  ones when you disarm, and keeps the battery as it is. For full realism, set
+  `[Drone] NewPropsOnDisarm=0`. Then only R (a full repair) or P fixes them. Set `[DVR] Mode=off` to turn off the ShadowPlay recording.
 - `GTAVE.FPV.log` in the game folder: the mod log.
 
 ## Checkpoint races
@@ -155,8 +158,8 @@ A race is a loop of gates. The first gate is the start and finish line.
    Each lap ends at the start gate, and the HUD shows the lap, the last lap
    time and the best lap time.
 
-Races are saved as text files in the `races` folder in the game folder, one
-gate per line. You can share them or edit them by hand. Press L to load the
+Races are saved as text files in the `fpv-data\races` folder in the game
+folder, one gate per line. You can share them or edit them by hand. Press L to load the
 next saved race, and press R to restart the lap from the start gate.
 
 Race settings in `GTAVE.FPV.ini`, section `[Race]`:

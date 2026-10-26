@@ -51,6 +51,7 @@ reshade-shaders\Textures\GTAVE_FPV_Bezel.png
 | Y | Move the player to the drone |
 | O | Switch the OSD style: analog or HD |
 | G | Show or hide the goggles bezel |
+| P | New propellers, where the drone is |
 | `,` and `.` | Previous or next radio station |
 | N, M, U, L | Races: record or save, mark a gate, undo, next race |
 

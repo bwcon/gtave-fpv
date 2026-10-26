@@ -3,7 +3,7 @@
 // N starts recording a new race and N again saves it. Each press of M, or
 // each flick of the mark switch ([Race] MarkSwitch, AUX3 by default), drops a
 // gate where the drone is, facing the way it flies. U removes the last gate.
-// L cycles through the saved races in <game>\races and off. The first gate is
+// L cycles through the saved races in <game>\fpv-data\races and off. The first gate is
 // the start and finish line; a lap is every gate in order and back to it.
 #pragma once
 

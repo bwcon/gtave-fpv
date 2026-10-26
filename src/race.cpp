@@ -55,7 +55,7 @@ std::string game_dir() {
     return dir.substr(0, dir.find_last_of("\\/"));
 }
 
-fs::path races_dir() { return fs::path(game_dir()) / "races"; }
+fs::path races_dir() { return fs::path(game_dir()) / "fpv-data" / "races"; }
 
 void read_settings() {
     if (g_settings_read) return;
