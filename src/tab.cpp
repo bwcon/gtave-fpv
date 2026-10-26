@@ -3,7 +3,7 @@
 #include <atomic>
 
 #include "drone.h"
-#include "goggles.h"
+#include "gear.h"
 #include "fpvapi.h"
 #include "log.h"
 #include "render.h"
@@ -88,17 +88,22 @@ void draw_status() {
     bool repair = drone::option(drone::RepairOnArm);
     if (ImGui::Checkbox("Repair on arm: new props, motors and a full battery every time you arm", &repair))
         drone::set_option(drone::RepairOnArm, repair);
-    // The pilot's goggles: live while flying, saved when a slider is let go.
-    goggles::Placement g = goggles::placement();
-    bool changed = ImGui::Checkbox("Pilot goggles on the player's head", &g.show);
-    bool save = changed;
-    if (g.show) {
-        changed |= ImGui::SliderFloat3("Goggles offset (m)", g.offset, -0.3f, 0.3f, "%.3f");
-        save |= ImGui::IsItemDeactivatedAfterEdit();
-        changed |= ImGui::SliderFloat3("Goggles rotation (deg)", g.rotation, -180.0f, 180.0f, "%.0f");
-        save |= ImGui::IsItemDeactivatedAfterEdit();
+    // The pilot's gear: live while flying, saved when a slider is let go.
+    for (int i = 0; i < gear::ItemCount; ++i) {
+        const gear::Item item = gear::Item(i);
+        gear::Placement g = gear::placement(item);
+        ImGui::PushID(gear::label(item));
+        bool changed = ImGui::Checkbox(gear::label(item), &g.show);
+        bool save = changed;
+        if (g.show) {
+            changed |= ImGui::SliderFloat3("offset (m)", g.offset, -0.3f, 0.3f, "%.3f");
+            save |= ImGui::IsItemDeactivatedAfterEdit();
+            changed |= ImGui::SliderFloat3("rotation (deg)", g.rotation, -180.0f, 180.0f, "%.0f");
+            save |= ImGui::IsItemDeactivatedAfterEdit();
+        }
+        ImGui::PopID();
+        if (changed || save) gear::set_placement(item, g, save);
     }
-    if (changed || save) goggles::set_placement(g, save);
     if (fpvapi::loaded()) {
         bool home = drone::home_on_every_arm();
         if (ImGui::Checkbox("New GPS home point at every arm (off: only the first arm)", &home))

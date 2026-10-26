@@ -59,6 +59,14 @@ constexpr uint64_t GET_PED_PROP_INDEX = 0x898CC20EA75BACD8;          // (ped, sl
 constexpr uint64_t GET_PED_PROP_TEXTURE_INDEX = 0xE131A28626F81AB2;  // (ped, slot)
 constexpr uint64_t CLEAR_PED_PROP = 0x0943E5B8E078E76E;              // (ped, slot, p2)
 constexpr uint64_t SET_PED_PROP_INDEX = 0x93376B65A266EB5F;          // (ped, slot, drawable, texture, attach, p5)
+
+// Animations (the two-handed radio hold).
+constexpr uint64_t REQUEST_ANIM_DICT = 0xD3BD40951412FEF6;      // (dict)
+constexpr uint64_t HAS_ANIM_DICT_LOADED = 0xD031A9162D01088C;   // (dict) -> bool
+// (ped, dict, anim, blendIn, blendOut, duration, flags, playbackRate, lockX, lockY, lockZ)
+constexpr uint64_t TASK_PLAY_ANIM = 0xEA47FE3719165B94;
+constexpr uint64_t STOP_ANIM_TASK = 0x97FF36A1D40EA00A;         // (ped, dict, anim, blendOut)
+constexpr uint64_t IS_ENTITY_PLAYING_ANIM = 0x1F0B79228E461EC9;  // (entity, dict, anim, taskFlag) -> bool
 constexpr uint64_t CLEAR_FOCUS = 0x31B73D1EA9F01DA2;
 
 constexpr uint64_t HIDE_HUD_AND_RADAR_THIS_FRAME = 0x719FF505F097FD20;

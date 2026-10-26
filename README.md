@@ -42,8 +42,9 @@ hammerill from GTA IV to GTA V Enhanced. It uses a fork of libfpv,
   seconds after you disarm.
 - Move the player here: ends the flight with the player standing where the
   drone is.
-- The player wears FPV goggles while flying. Any hat or glasses come off and
-  go back on after. The GTAVE.FPV tab can turn them off or adjust their fit.
+- The player wears FPV goggles and holds a RadioMaster TX12 while flying. Any
+  hat or glasses come off and go back on after. The GTAVE.FPV tab can turn
+  each one off or adjust its fit.
 - Checkpoint races: record gates in flight with a radio switch, then fly
   timed laps through them.
 
@@ -111,7 +112,7 @@ Copy these files into the game folder, next to `GTA5_Enhanced.exe`:
 | `libfpv.dll` | The game folder. This is the drone simulator. |
 | `GTAVE_FPV_Lens.fx` | `reshade-shaders\Shaders` |
 | `GTAVE_FPV_Bezel.png` | `reshade-shaders\Textures` |
-| `dlcpacks\gtavefpv\dlc.rpf` | The drone (a DJI Avata 2) and the pilot's goggles. See below. |
+| `dlcpacks\gtavefpv\dlc.rpf` | The drone (a DJI Avata 2), the pilot's goggles and radio. See below. |
 
 The drone model is an add-on dlcpack. With onigiri, copy the `gtavefpv`
 folder to `onigiri\dlcpacks`, and add this line before `</Paths>` in
@@ -268,6 +269,9 @@ what was tested in the game.
 - The pilot's goggles: ["Tripo FPV DJI Goggles"](https://sketchfab.com/3d-models/tripo-fpv-dji-goggles-9edb8544e5ba4cd1985fd997d366b260)
   by line-o, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), reduced,
   scaled and converted the same way.
+- The pilot's radio: ["Radiomaster TX12 rc radio controller"](https://sketchfab.com/3d-models/radiomaster-tx12-rc-radio-controller-0edc6bca739d4aa6952bb6b8747318bb)
+  by flightclubua, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/),
+  reduced, scaled and converted the same way.
 - Written with Claude (Anthropic).
 
 ## License

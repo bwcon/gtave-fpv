@@ -26,7 +26,7 @@ add_library(gtave_fpv_core SHARED
   src/drone.cpp
   src/dvr.cpp
   src/fpvapi.cpp
-  src/goggles.cpp
+  src/gear.cpp
   src/lens.cpp
   src/world.cpp
   src/osd.cpp
