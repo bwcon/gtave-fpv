@@ -22,7 +22,8 @@ https://creativecommons.org/licenses/by/4.0/
 
 Changes: reduced from 423,980 to 8,000 triangles, scaled to real size (0.22 m
 across), turned to face GTA's forward axis, its colour texture reduced to
-512 px, and converted to GTA V formats with Sollumz.
+512 px and darkened to match the drone's black body, and converted to GTA V
+formats with Sollumz.
 
 Radio: "Radiomaster TX12 rc radio controller" by flightclubua
 https://sketchfab.com/3d-models/radiomaster-tx12-rc-radio-controller-0edc6bca739d4aa6952bb6b8747318bb

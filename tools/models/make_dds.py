@@ -1,6 +1,9 @@
 """An image as an uncompressed 32-bit DDS (A8R8G8B8) with mipmaps, for Sollumz to embed.
 
-    python -I tools/models/make_dds.py <image> <size> <out.dds>
+    python -I tools/models/make_dds.py <image> <size> <out.dds> [brightness]
+
+brightness scales the colours (0.35: the goggles' grey texture to the Avata's
+dark grey body).
 """
 import struct
 import sys
@@ -8,7 +11,12 @@ import sys
 from PIL import Image
 
 src, size, out = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+brightness = float(sys.argv[4]) if len(sys.argv) > 4 else 1.0
 img = Image.open(src).convert("RGBA").resize((size, size), Image.LANCZOS)
+if brightness != 1.0:
+    r, g, b, a = img.split()
+    r, g, b = (c.point(lambda v: min(255, round(v * brightness))) for c in (r, g, b))
+    img = Image.merge("RGBA", (r, g, b, a))
 levels = []
 while True:
     r, g, b, a = img.split()
