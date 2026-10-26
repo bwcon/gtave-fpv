@@ -18,7 +18,7 @@ struct Texture {
     api::resource resource{0};
     api::resource_view view{0};
 };
-Texture g_textures[] = {{FPV_TEXTURE_OVERLAY_FONT}, {FPV_TEXTURE_OSD_FONT}};
+Texture g_textures[] = {{FPV_TEXTURE_OVERLAY_FONT}, {FPV_TEXTURE_OSD_FONT}, {FPV_TEXTURE_OSD_LOGO}};
 api::device *g_device = nullptr;
 api::command_queue *g_queue = nullptr;
 

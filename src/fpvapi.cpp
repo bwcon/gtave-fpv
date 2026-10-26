@@ -90,6 +90,11 @@ bool load() {
         fpvlog::write("fpv_global_init: %s (%s)", fpv.fpv_result_string(r), fpv.fpv_last_error());
         return false;
     }
+    // The mod's boot logo replaces Betaflight's glyph logo in the OSD.
+    const std::string logo = game_dir() + "\\GTAVE.FPV.logo.png";
+    if (fpv.fpv_osd_set_logo && GetFileAttributesA(logo.c_str()) != INVALID_FILE_ATTRIBUTES &&
+        fpv.fpv_osd_set_logo(logo.c_str()) != FPV_OK)
+        fpvlog::write("OSD logo: %s", fpv.fpv_last_error());
     g_failed = false;
     g_loaded = true;
     fpvlog::write("libfpv %s initialised, data in %s", fpv.fpv_version_string(), data_dir.c_str());
