@@ -5,6 +5,9 @@
 // overwrite the original. ReShade's per-frame calls are forwarded to the core.
 #include <windows.h>
 
+#include <atomic>
+#include <cstring>
+
 #define ImTextureID ImU64  // ReShade passes resource views as 64-bit texture IDs
 #include <imgui.h>
 #include <reshade.hpp>
@@ -38,7 +41,12 @@ CoreDeviceFn g_core_release_device = nullptr;
 CoreRuntimeFn g_core_begin_effects = nullptr;
 CoreRuntimeFn g_core_reloaded_effects = nullptr;
 FILETIME g_core_time{};
-bool g_addon = false;
+std::atomic<bool> g_addon{false};
+SRWLOCK g_register_lock = SRWLOCK_INIT;
+
+// The lens effect's Active uniform, for the frames before the core loads.
+reshade::api::effect_runtime *g_lens_runtime = nullptr;
+reshade::api::effect_uniform_variable g_lens_active = {0};
 
 // The render thread holds this shared while it calls into the core; a reload
 // takes it exclusively, so the core is never unloaded mid-frame.
@@ -60,15 +68,36 @@ void on_overlay(reshade::api::effect_runtime *runtime) {
     ReleaseSRWLockShared(&g_core_lock);
 }
 
+// Until the core loads (with the world), the lens stays off. A preset saved in
+// the FPV view holds Active = 1, which would show the lens over the logos.
+// Uniform handles come from enumerate_uniform_variables (MSVC/MinGW ABI, see lens.cpp).
+void keep_lens_off(reshade::api::effect_runtime *runtime) {
+    if (runtime != g_lens_runtime || !g_lens_active.handle) {
+        g_lens_runtime = runtime;
+        g_lens_active = {0};
+        runtime->enumerate_uniform_variables(
+            "GTAVE_FPV_Lens.fx", [](reshade::api::effect_runtime *rt, reshade::api::effect_uniform_variable var) {
+                char name[16] = "";
+                size_t size = sizeof name;
+                rt->get_uniform_variable_name(var, name, &size);
+                if (std::strcmp(name, "Active") == 0) g_lens_active = var;
+            });
+    }
+    const float off = 0.0f;
+    if (g_lens_active.handle) runtime->set_uniform_value_float(g_lens_active, &off, 1, 0);
+}
+
 // Before ReShade runs its effects: the lens effect's uniforms.
 void on_begin_effects(reshade::api::effect_runtime *runtime, reshade::api::command_list *,
                       reshade::api::resource_view, reshade::api::resource_view) {
     AcquireSRWLockShared(&g_core_lock);
     if (g_core_begin_effects) g_core_begin_effects(runtime);
+    else keep_lens_off(runtime);
     ReleaseSRWLockShared(&g_core_lock);
 }
 
 void on_reloaded_effects(reshade::api::effect_runtime *runtime) {
+    g_lens_runtime = nullptr;  // the handles changed
     AcquireSRWLockShared(&g_core_lock);
     if (g_core_reloaded_effects) g_core_reloaded_effects(runtime);
     ReleaseSRWLockShared(&g_core_lock);
@@ -82,17 +111,32 @@ void on_destroy_device(reshade::api::device *device) {
     ReleaseSRWLockShared(&g_core_lock);
 }
 
-// ReShade.asi loads after this ASI (the loader goes alphabetically), so the
-// script fiber registers once ReShade is in the process.
+// ReShade.asi loads after this ASI (the loader goes alphabetically), so a
+// thread from DllMain registers as soon as ReShade is in the process, before
+// the logos; the script fiber tries too, in case that thread gave up.
 void try_register_addon() {
-    if (g_addon || !reshade::register_addon(g_module)) return;
+    if (g_addon) return;
+    AcquireSRWLockExclusive(&g_register_lock);
+    if (g_addon || !reshade::register_addon(g_module)) {
+        ReleaseSRWLockExclusive(&g_register_lock);
+        return;
+    }
     reshade::register_overlay("GTAVE.FPV", &on_tab);
     reshade::register_event<reshade::addon_event::destroy_device>(&on_destroy_device);
     reshade::register_event<reshade::addon_event::reshade_overlay>(&on_overlay);
     reshade::register_event<reshade::addon_event::reshade_begin_effects>(&on_begin_effects);
     reshade::register_event<reshade::addon_event::reshade_reloaded_effects>(&on_reloaded_effects);
     g_addon = true;
+    ReleaseSRWLockExclusive(&g_register_lock);
     fpvlog::write("loader: registered with ReShade as an add-on (API %d)", RESHADE_API_VERSION);
+}
+
+DWORD WINAPI early_register(LPVOID) {
+    for (int i = 0; i < 2400 && !g_addon; ++i) {  // up to 2 minutes
+        Sleep(50);
+        try_register_addon();
+    }
+    return 0;
 }
 
 bool core_changed() {
@@ -167,6 +211,7 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID reserved) {
         g_module = module;
         fpvlog::write("GTAVE.FPV attached");
         shv::register_script(module, &script_main);
+        if (HANDLE t = CreateThread(nullptr, 0, &early_register, nullptr, 0, nullptr)) CloseHandle(t);
     } else if (reason == DLL_PROCESS_DETACH && reserved == nullptr) {
         // Only on a real unload. At process exit ReShade may already be gone.
         if (g_addon) {
