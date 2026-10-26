@@ -29,10 +29,10 @@ struct Pose {
 const Pose kPoses[] = {
     {"texting", "Both hands, thumbs (texting)", "amb@world_human_stand_mobile@male@text@base", "base",
      28422,  // PH_R_Hand
-     {true, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}}},
+     {true, {0.02f, 0.01f, 0.01f}, {0.0f, 0.0f, 0.0f}}},
     {"arena", "Both hands, drone controller (Arena War)", "anim@arena@amb@seat_drone_tablet@male@", "base",
      28422,  // PH_R_Hand
-     {true, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}}},
+     {true, {0.06f, 0.02f, 0.0f}, {0.0f, 90.0f, 0.0f}}},
     {"map", "Both hands (reading a map)", "amb@world_human_tourist_map@male@base", "base", 28422,  // PH_R_Hand
      {true, {0.041f, -0.002f, 0.021f}, {20.0f, 0.0f, 0.0f}}},
     {"tablet", "Left hand, right hand swiping (tablet)", "amb@code_human_in_bus_passenger_idles@female@tablet@base",
