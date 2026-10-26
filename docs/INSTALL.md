@@ -1,105 +1,68 @@
-# Install GTA IV FPV
+# Install GTA V Enhanced FPV
 
-Fly an FPV drone through Liberty City with your own radio, gamepad or
-keyboard. This takes about five minutes.
+Fly a real-Betaflight FPV drone through Los Santos with your own radio,
+gamepad or keyboard. The install takes about five minutes.
 
-**[Download gtaiv-fpv.zip](https://github.com/hammerill/gtaiv-fpv/releases/latest/download/gtaiv-fpv.zip)**
+## 1. What you need
 
-## 1. Have the right game
+- GTA V Enhanced (the 2025 PC edition), story mode.
+- ScriptHookV with GTA V Enhanced support, with its ASI loader
+  (`dinput8.dll`): http://www.dev-c.com/gtav/scripthookv/
+- ReShade 6.x "with full add-on support", installed for GTA V Enhanced with
+  DirectX 12: https://reshade.me
+- Optional: an FPV radio in USB joystick mode, and the NVIDIA app for the
+  FPV DVR.
 
-You need **GTA IV: The Complete Edition, version 1.2.0.59**: the current
-version on [Steam](https://store.steampowered.com/app/12210/). Older versions
-(1.0.x, from the disc or from before the Complete Edition) are not supported.
+## 2. Copy the files
 
-Find the game folder: in Steam, right-click the game > Manage > Browse local
-files, then open the **`GTAIV`** folder (the one with `GTAIV.exe` in it).
-Every step below puts files into that folder.
-
-## 2. Install FusionFix
-
-1. Download [**GTAIV.EFLC.FusionFix.zip**](https://github.com/ThirteenAG/GTAIV.EFLC.FusionFix/releases/latest/download/GTAIV.EFLC.FusionFix.zip)
-   (from [FusionFix's releases](https://github.com/ThirteenAG/GTAIV.EFLC.FusionFix/releases/latest)).
-2. Extract everything into the `GTAIV` folder. `dinput8.dll` should end up
-   next to `GTAIV.exe`.
-
-## 3. Install ScriptHook
-
-1. Download [**scripthookdotnet_v1.7.1.8.zip**](https://github.com/Tomasak/gta4_scripthookdotnet/releases/download/release/scripthookdotnet_v1.7.1.8.zip)
-   (from [Tomasak's ScriptHook releases](https://github.com/Tomasak/gta4_scripthookdotnet/releases/latest)).
-2. Extract everything into the `GTAIV` folder. `ScriptHook.dll` should end
-   up next to `GTAIV.exe`.
-
-## 4. Install GTA IV FPV
-
-1. Download [**gtaiv-fpv.zip**](https://github.com/hammerill/gtaiv-fpv/releases/latest/download/gtaiv-fpv.zip).
-2. Extract everything into the `GTAIV` folder.
-
-Your `GTAIV` folder now has, among the game's own files:
+Copy everything in this ZIP into the game folder, next to
+`GTA5_Enhanced.exe`. Keep the folders:
 
 ```
-GTAIV/
-├── GTAIV.exe
-├── dinput8.dll           (FusionFix)
-├── plugins/              (FusionFix)
-├── ScriptHook.dll        (ScriptHook)
-├── GTAIV.FPV.asi         (this mod)
-├── GTAIV.FPV.core.dll    (this mod)
-└── libfpv.dll            (this mod)
+GTA5_Enhanced.exe
+GTAVE.FPV.asi
+GTAVE.FPV.core.dll
+GTAVE.FPV.logo.png
+libfpv.dll
+reshade-shaders\Shaders\GTAVE_FPV_Lens.fx
+reshade-shaders\Textures\GTAVE_FPV_Bezel.png
 ```
 
-## 5. Fly
+## 3. Turn on the lens effect
 
-Start the game, load a save and press **F7**. Niko launches the drone.
+1. Start the game and load story mode.
+2. Press Home to open ReShade.
+3. Turn on the "GTAVE.FPV lens" effect, and move it to the end of the list.
+   Keep it on: the mod shows the lens only in the FPV view.
+
+## 4. Fly
+
+1. Press F9. A drone launches in front of you.
+2. Press Home, open the Add-ons page, and open the GTAVE.FPV tab.
+3. Follow the radio setup wizard once. The keyboard also works: Enter arms,
+   W and S are throttle, A and D are yaw, and the arrow keys are pitch and
+   roll.
 
 | Key | Action |
 |---|---|
-| F7 | Launch the drone / return to Niko |
-| F8 | Settings: radio setup, rates, OSD, camera |
+| F9 | Launch the drone, or return to the player |
 | C | Cycle cameras: FPV, chase, line of sight |
 | R | Respawn the drone, repaired |
-| Y | Move Niko to the drone |
+| Y | Move the player to the drone |
+| O | Switch the OSD style: analog or HD |
+| G | Show or hide the goggles bezel |
+| `,` and `.` | Previous or next radio station |
+| N, M, U, L | Races: record or save, mark a gate, undo, next race |
 
-- **Radio:** plug it in (USB joystick mode), press F8 and follow the radio
-  setup wizard once. Your setup is remembered. Besides arm, it asks for
-  angle mode, beeper, turtle, air mode and OSD disable switches; skip any
-  you don't want. OSD disable gives a clean picture for recording: no OSD
-  and no game text.
-- **Keyboard:** Enter arms, W/S is throttle, A/D is yaw, and the arrow keys
-  are pitch and roll.
-- **Gamepad:** works too.
+Turn off DLSS frame generation for FPV flying, because it adds input latency.
 
-## Tune it in Betaflight Configurator
+## Betaflight Configurator
 
-The drone runs real Betaflight, so you can set it up like a real quad, with
-PIDs, filters, rates and modes, in
-[Betaflight Configurator](https://app.betaflight.com) (the web app or the
-desktop app):
+The drone runs real Betaflight 2026.6. To connect Betaflight Configurator,
+launch the drone, turn on manual connection mode in Configurator's Options,
+and connect to `ws://localhost:5761`.
 
-1. In the game, launch the drone with F7.
-2. In Configurator, open Options and turn on **manual connection mode**.
-3. Pick **Manual Selection**, enter `ws://localhost:5761` as the port and
-   press Connect.
+## Source and license
 
-F8 > Configurator shows the same address. While Configurator is connected,
-Betaflight won't arm, the same as a real quad, so disconnect it before you
-fly. Keep the motor protocol on PWM and ARM on AUX1.
-
-## Updating
-
-Download the newest `gtaiv-fpv.zip` and extract it over the old files. Your
-settings are kept.
-
-## Uninstalling
-
-Delete `GTAIV.FPV.asi`, `GTAIV.FPV.core.dll`, `GTAIV.FPV.core.live.dll`,
-`libfpv.dll`, `libfpv.LICENSE.txt`, `GTAIV.FPV.log` and the `fpv-data`
-folder.
-
-## Something wrong?
-
-- **F7 does nothing:** check that `dinput8.dll` (step 2) and
-  `ScriptHook.dll` (step 3) are next to `GTAIV.exe`, and that the three
-  mod files are in the same folder, not in a subfolder.
-- **Anything else:** look in `GTAIV/GTAIV.FPV.log`, then
-  [open an issue](https://github.com/hammerill/gtaiv-fpv/issues) and attach
-  that file.
+GPL-3.0-or-later. The source is at https://github.com/bwcon/gtave-fpv and
+https://github.com/bwcon/libfpv.

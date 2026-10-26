@@ -6,3 +6,4 @@ build/
 *.wdr
 *.wft
 backups/
+dist/
