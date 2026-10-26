@@ -15,7 +15,7 @@ namespace fpvapi {
     X(fpv_overlay_mouse_move) X(fpv_overlay_mouse_button) X(fpv_overlay_mouse_wheel)             \
     X(fpv_overlay_render) X(fpv_osd_draw_data) X(fpv_audio_configure) X(fpv_audio_read)          \
     X(fpv_overlay_set_action) X(fpv_overlay_poll_action) X(fpv_gps_set_home) X(fpv_overlay_set_open) \
-    X(fpv_overlay_text)
+    X(fpv_overlay_text) X(fpv_cli_exec) X(fpv_free)
 
 // Only in bwcon/libfpv builds; null with an upstream libfpv.dll.
 #define FPV_FORK_FUNCTIONS(X) X(fpv_shared_data_dir) X(fpv_osd_get_style) X(fpv_osd_set_style) X(fpv_osd_set_logo) \

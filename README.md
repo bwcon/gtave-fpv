@@ -141,8 +141,16 @@ The mod uses these files:
   folder.
 - `GTAVE.FPV.ini` in the game folder: the drone model, the bezel opening and
   the DVR mode. A crash bends the propellers. By default the mod fits new
-  ones when you disarm, and keeps the battery as it is. For full realism, set
-  `[Drone] NewPropsOnDisarm=0`. Then only R (a full repair) or P fixes them. Set `[DVR] Mode=off` to turn off the ShadowPlay recording.
+  ones when you disarm, and keeps the battery as it is.
+
+The GTAVE.FPV tab has three flight options:
+
+- Full realism: bent props stay bent until P or R (`[Drone] NewPropsOnDisarm=0`).
+- Repair on arm: every arm gives new props, cool motors and a full battery
+  (`[Drone] RepairOnArm=1`).
+- New GPS home point at every arm: on by default. Turn it off to keep the
+  first arm's home for the whole flight. This is Betaflight's
+  `gps_set_home_point_once` setting. Set `[DVR] Mode=off` to turn off the ShadowPlay recording.
 - `GTAVE.FPV.log` in the game folder: the mod log.
 
 ## Checkpoint races

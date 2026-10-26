@@ -38,6 +38,20 @@ bool osd_frame(fpv_frame *out);
 // Seconds since this flight's launch, for the goggles' recording timer. Any thread.
 double flight_seconds();
 
+// Flight options in GTAVE.FPV.ini [Drone], shown as checkboxes in the tab. Any thread.
+enum Option {
+    NewPropsOnDisarm,  // bent props are swapped when the drone disarms (off: full realism)
+    RepairOnArm,       // arming gives a full repair: props, motors and battery
+    OptionCount
+};
+bool option(Option o);
+void set_option(Option o, bool on);
+
+// Betaflight's home point at every arm (gps_set_home_point_once = OFF), or
+// only at the first. Not before libfpv is loaded. Any thread.
+bool home_on_every_arm();
+void set_home_on_every_arm(bool on);
+
 // Values for GTAVE_FPV_Lens.fx. Any thread.
 struct LensState {
     bool active = false;  // FPV view of a flying drone

@@ -2,9 +2,11 @@
 
 #include <windows.h>
 
+#include <atomic>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <mutex>
 #include <string>
 
@@ -45,7 +47,13 @@ float g_spawn_rot[4];
 LARGE_INTEGER g_last_tick;
 double g_first_sim_time = -1;  // sim clock at the first frame of this flight
 bool g_was_armed = false;
-bool g_props_on_disarm = true;
+struct OptionInfo {
+    const char *key;
+    bool fallback;
+};
+const OptionInfo kOptions[OptionCount] = {{"NewPropsOnDisarm", true}, {"RepairOnArm", false}};
+std::atomic<int> g_options[OptionCount] = {-1, -1};  // -1: not read from the ini yet
+std::atomic<int> g_home_every_arm{-1};               // -1: not read from Betaflight yet
 fpv_frame g_frame{};
 float g_near_clip = 0, g_fov = 0;  // last values sent to the game, for the trace
 
@@ -85,7 +93,6 @@ struct DroneSettings {
     std::string model;        // [Drone] Model: empty = the candidate closest to TargetSize
     float yaw_offset = 0;     // [Drone] YawOffset, degrees
     float target_size = 0.30f;  // [Drone] TargetSize, metres across with props (a 5" quad)
-    bool props_on_disarm = true;  // [Drone] NewPropsOnDisarm: bent props are swapped when you disarm
 };
 
 std::string ini_get(const std::string &ini, const char *key, const char *fallback) {
@@ -109,7 +116,7 @@ DroneSettings read_settings() {
     s.model = value("Model", "");
     s.yaw_offset = float(std::atof(value("YawOffset", "0").c_str()));
     s.target_size = float(std::atof(value("TargetSize", "0.30").c_str()));
-    s.props_on_disarm = std::atoi(value("NewPropsOnDisarm", "1").c_str()) != 0;
+    for (const OptionInfo &o : kOptions) value(o.key, o.fallback ? "1" : "0");
     return s;
 }
 
@@ -397,7 +404,6 @@ void start() {
     fpv.fpv_world_set_raycast_callback(&world::raycast, nullptr);
     fpv.fpv_gps_set_home(nullptr);  // home is where the drone arms, as on a real quad
     spawn_prop(g_spawn_pos);
-    g_props_on_disarm = read_settings().props_on_disarm;
     g_was_armed = false;
 
     hold_player(true);
@@ -490,6 +496,39 @@ bool osd_frame(fpv_frame *out) {
 double flight_seconds() {
     std::lock_guard<std::mutex> lock(g_osd_mutex);
     return g_flight_seconds;
+}
+
+bool option(Option o) {
+    if (g_options[o] < 0) {
+        read_settings();  // writes the missing keys
+        g_options[o] = GetPrivateProfileIntA("Drone", kOptions[o].key, kOptions[o].fallback, ini_path().c_str()) != 0;
+    }
+    return g_options[o] == 1;
+}
+
+void set_option(Option o, bool on) {
+    g_options[o] = on ? 1 : 0;
+    WritePrivateProfileStringA("Drone", kOptions[o].key, on ? "1" : "0", ini_path().c_str());
+}
+
+bool home_on_every_arm() {
+    if (g_home_every_arm < 0 && fpvapi::loaded() && fpv.fpv_cli_exec) {
+        char *out = nullptr;
+        if (fpv.fpv_cli_exec("get gps_set_home_point_once\n", &out) == FPV_OK && out)
+            g_home_every_arm = std::strstr(out, "gps_set_home_point_once = OFF") != nullptr;
+        fpv.fpv_free(out);
+    }
+    return g_home_every_arm != 0;  // Betaflight's default until read
+}
+
+void set_home_on_every_arm(bool on) {
+    if (!fpvapi::loaded() || !fpv.fpv_cli_exec) return;
+    char *out = nullptr;
+    if (fpv.fpv_cli_exec(on ? "set gps_set_home_point_once = OFF\nsave noreboot\n"
+                            : "set gps_set_home_point_once = ON\nsave noreboot\n",
+                         &out) == FPV_OK)
+        g_home_every_arm = on;
+    fpv.fpv_free(out);
 }
 
 LensState lens_state() {
@@ -597,7 +636,9 @@ void tick() {
     const bool armed = (frame.flags & FPV_DRONE_ARMED) != 0;
     dvr::tick(armed);
     // Like walking out after a crash: new props, the same battery.
-    if (g_was_armed && !armed && g_props_on_disarm && fpv.fpv_drone_replace_props) fpv.fpv_drone_replace_props(g_drone);
+    if (g_was_armed && !armed && option(NewPropsOnDisarm) && fpv.fpv_drone_replace_props)
+        fpv.fpv_drone_replace_props(g_drone);
+    if (!g_was_armed && armed && option(RepairOnArm)) fpv.fpv_drone_repair(g_drone);
     g_was_armed = armed;
     publish_status(true);
 

@@ -81,6 +81,17 @@ void draw_status() {
     }
     ImGui::TextUnformatted("F9 launch / land   C camera   R respawn   Y move player here   O OSD analog / HD   G goggles   P new props");
     ImGui::TextUnformatted("Races: N record / save   M or AUX3 mark gate   U undo   L next race / off");
+    bool realism = !drone::option(drone::NewPropsOnDisarm);
+    if (ImGui::Checkbox("Full realism: bent props stay bent until P or R (no new props on disarm)", &realism))
+        drone::set_option(drone::NewPropsOnDisarm, !realism);
+    bool repair = drone::option(drone::RepairOnArm);
+    if (ImGui::Checkbox("Repair on arm: new props, motors and a full battery every time you arm", &repair))
+        drone::set_option(drone::RepairOnArm, repair);
+    if (fpvapi::loaded()) {
+        bool home = drone::home_on_every_arm();
+        if (ImGui::Checkbox("New GPS home point at every arm (off: only the first arm)", &home))
+            drone::set_home_on_every_arm(home);
+    }
     ImGui::Separator();
 }
 
