@@ -19,7 +19,7 @@ namespace fpvapi {
 
 // Only in bwcon/libfpv builds; null with an upstream libfpv.dll.
 #define FPV_FORK_FUNCTIONS(X) X(fpv_shared_data_dir) X(fpv_osd_get_style) X(fpv_osd_set_style) X(fpv_osd_set_logo) \
-    X(fpv_camera_get_fov) X(fpv_camera_set_fov) X(fpv_drone_replace_props)
+    X(fpv_camera_get_fov) X(fpv_camera_set_fov) X(fpv_drone_replace_props) X(fpv_overlay_set_embedded)
 
 struct Api {
 #define FPV_FN(name) decltype(&::name) name = nullptr;

@@ -114,6 +114,7 @@ void draw(api::effect_runtime *runtime) {
     const ImVec2 origin = render::msvc_vec2(imgui_function_table_instance()->GetCursorScreenPos);
     fpv.fpv_overlay_set_open(1);
     fpv.fpv_overlay_set_display(avail.x, avail.y, 1.0f);
+    if (fpv.fpv_overlay_set_embedded) fpv.fpv_overlay_set_embedded(1);  // the add-on settings are its window
     // Takes the mouse over the area, so ReShade does not drag its window instead.
     ImGui::InvisibleButton("##libfpv", avail,
                            ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight |
