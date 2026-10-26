@@ -67,6 +67,7 @@ flightclubua, all CC BY 4.0. See `dlcpacks\gtavefpv\CREDITS.txt`.
 | P | New propellers, where the drone is |
 | `,` and `.` | Previous or next radio station |
 | N, M, U, L | Races: record or save, mark a gate, undo, next race |
+| E | Races: mark the finish gate and save a point to point race |
 
 Turn off DLSS frame generation for FPV flying, because it adds input latency.
 
