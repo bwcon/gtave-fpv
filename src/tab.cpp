@@ -98,6 +98,12 @@ void draw_status() {
         ImGui::PushID(gear::label(item));
         bool changed = ImGui::Checkbox(gear::label(item), &g.show);
         bool save = changed;
+        if (g.show && item == gear::Goggles && ImGui::BeginCombo("colour", gear::colour_label(gear::goggles_colour()), 0)) {
+            for (int k = 0; k < gear::colour_count(); ++k)
+                if (ImGui::Selectable(gear::colour_label(k), k == gear::goggles_colour(), 0, ImVec2(0, 0)))
+                    gear::set_goggles_colour(k);
+            ImGui::EndCombo();
+        }
         if (g.show && item == gear::Radio && ImGui::BeginCombo("hold", gear::pose_label(gear::radio_pose()), 0)) {
             for (int k = 0; k < gear::pose_count(); ++k)
                 if (ImGui::Selectable(gear::pose_label(k), k == gear::radio_pose(), 0, ImVec2(0, 0))) {

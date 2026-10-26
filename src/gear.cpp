@@ -41,6 +41,18 @@ const Pose kPoses[] = {
 };
 constexpr int kPoseCount = sizeof kPoses / sizeof kPoses[0];
 
+// The goggles' colours ([Goggles] Color): one model each in the dlcpack, the same
+// mesh with a tinted texture. Black is gtavefpv_goggles itself.
+struct Colour {
+    const char *key, *label, *model;
+};
+const Colour kColours[] = {
+    {"black", "Black", "gtavefpv_goggles"},          {"grey", "Grey", "gtavefpv_goggles_grey"},
+    {"white", "White", "gtavefpv_goggles_white"},    {"red", "Red", "gtavefpv_goggles_red"},
+    {"blue", "Blue", "gtavefpv_goggles_blue"},       {"green", "Green", "gtavefpv_goggles_green"},
+};
+constexpr int kColourCount = sizeof kColours / sizeof kColours[0];
+
 struct ItemInfo {
     const char *model, *section, *label;
     int bone;  // ped bone id
@@ -59,6 +71,8 @@ bool g_read = false;
 int g_object[ItemCount] = {};
 bool g_missing[ItemCount] = {};  // not installed: do not look again every tick
 int g_pose = 0;                  // kPoses index
+int g_colour = 0;                // kColours index
+int g_spawned_colour = 0;        // the colour of the goggles object
 int g_holding = -1;              // the pose whose animation runs, -1 none
 DWORD g_hold_started = 0;        // when it was last started (GetTickCount)
 int g_hold_waits = 0;            // ticks its dictionary has been loading
@@ -85,6 +99,7 @@ void write(Item item) {
     std::snprintf(buf, sizeof buf, "%.1f,%.1f,%.1f", p.rotation[0], p.rotation[1], p.rotation[2]);
     WritePrivateProfileStringA(s, "Rotation", buf, ini.c_str());
     if (item == Radio) WritePrivateProfileStringA(s, "Pose", kPoses[g_pose].key, ini.c_str());
+    if (item == Goggles) WritePrivateProfileStringA(s, "Color", kColours[g_colour].key, ini.c_str());
 }
 
 // Under g_mutex.
@@ -110,6 +125,11 @@ void read_once() {
                 continue;
             }
         }
+        if (i == Goggles) {
+            GetPrivateProfileStringA(s, "Color", "", buf, sizeof buf, ini.c_str());
+            for (int k = 0; k < kColourCount; ++k)
+                if (lstrcmpiA(buf, kColours[k].key) == 0) g_colour = k;
+        }
         p.show = GetPrivateProfileIntA(s, "Show", 1, ini.c_str()) != 0;
         GetPrivateProfileStringA(s, "Offset", "", buf, sizeof buf, ini.c_str());
         std::sscanf(buf, "%f,%f,%f", &p.offset[0], &p.offset[1], &p.offset[2]);
@@ -120,11 +140,12 @@ void read_once() {
     }
 }
 
-void spawn(Item item, int ped) {
+void spawn(Item item, int ped, int colour) {
     if (g_object[item] || g_missing[item]) return;
-    const uint32_t model = shv::call<uint32_t>(nat::GET_HASH_KEY, kItems[item].model);
+    const char *name = item == Goggles ? kColours[colour].model : kItems[item].model;
+    const uint32_t model = shv::call<uint32_t>(nat::GET_HASH_KEY, name);
     if (!shv::call<bool>(nat::IS_MODEL_IN_CDIMAGE, model)) {
-        fpvlog::write("gear: %s not installed (dlcpacks/gtavefpv)", kItems[item].model);
+        fpvlog::write("gear: %s not installed (dlcpacks/gtavefpv)", name);
         g_missing[item] = true;
         return;
     }
@@ -137,14 +158,15 @@ void spawn(Item item, int ped) {
     if (!obj) return;
     shv::call(nat::SET_ENTITY_COLLISION, obj, false, false);
     g_object[item] = obj;
-    if (item == Goggles) {  // a hat or glasses would poke through the goggles
+    if (item == Goggles) {
+        g_spawned_colour = colour;  // a hat or glasses would poke through the goggles
         for (int slot : {kHat, kGlasses}) {
             g_saved[slot].drawable = shv::call<int>(nat::GET_PED_PROP_INDEX, ped, slot, 0);
             g_saved[slot].texture = shv::call<int>(nat::GET_PED_PROP_TEXTURE_INDEX, ped, slot);
             if (g_saved[slot].drawable >= 0) shv::call(nat::CLEAR_PED_PROP, ped, slot, 0);
         }
     }
-    fpvlog::write("gear: %s on (object %d)", kItems[item].model, obj);
+    fpvlog::write("gear: %s on (object %d)", name, obj);
 }
 
 void remove(Item item, int ped) {
@@ -204,6 +226,23 @@ void hold(int ped, bool on) {
 
 const char *label(Item item) { return kItems[item].label; }
 
+int colour_count() { return kColourCount; }
+const char *colour_label(int colour) { return kColours[colour].label; }
+
+int goggles_colour() {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    read_once();
+    return g_colour;
+}
+
+void set_goggles_colour(int colour) {
+    std::lock_guard<std::mutex> lock(g_mutex);
+    read_once();
+    if (colour < 0 || colour >= kColourCount || colour == g_colour) return;
+    g_colour = colour;
+    write(Goggles);
+}
+
 int pose_count() { return kPoseCount; }
 const char *pose_label(int pose) { return kPoses[pose].label; }
 
@@ -248,7 +287,12 @@ void tick(int ped) {
             remove(item, ped);
             continue;
         }
-        spawn(item, ped);
+        const int colour = goggles_colour();
+        if (item == Goggles && g_object[item] && g_spawned_colour != colour) {
+            remove(item, ped);  // put on the new colour
+            g_missing[item] = false;
+        }
+        spawn(item, ped, colour);
         if (!g_object[item]) continue;
         const int bone_id = item == Radio ? kPoses[radio_pose()].bone : kItems[item].bone;
         const int bone = shv::call<int>(nat::GET_PED_BONE_INDEX, ped, bone_id);

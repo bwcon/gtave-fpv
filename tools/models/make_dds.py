@@ -3,7 +3,7 @@
     python -I tools/models/make_dds.py <image> <size> <out.dds> [brightness]
 
 brightness scales the colours (0.35: the goggles' grey texture to the Avata's
-dark grey body).
+dark grey body). "r,g,b" scales each channel, to tint (3,0.5,0.45: red goggles).
 """
 import struct
 import sys
@@ -11,12 +11,13 @@ import sys
 from PIL import Image
 
 src, size, out = sys.argv[1], int(sys.argv[2]), sys.argv[3]
-brightness = float(sys.argv[4]) if len(sys.argv) > 4 else 1.0
+scale = [float(v) for v in sys.argv[4].split(",")] if len(sys.argv) > 4 else [1.0]
+scale = scale * 3 if len(scale) == 1 else scale
 img = Image.open(src).convert("RGBA").resize((size, size), Image.LANCZOS)
-if brightness != 1.0:
-    r, g, b, a = img.split()
-    r, g, b = (c.point(lambda v: min(255, round(v * brightness))) for c in (r, g, b))
-    img = Image.merge("RGBA", (r, g, b, a))
+if scale != [1.0] * 3:
+    *rgb, a = img.split()
+    rgb = [c.point(lambda v, k=k: min(255, round(v * k))) for c, k in zip(rgb, scale)]
+    img = Image.merge("RGBA", (*rgb, a))
 levels = []
 while True:
     r, g, b, a = img.split()

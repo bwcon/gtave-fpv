@@ -29,4 +29,10 @@ const char *pose_label(int pose);
 int radio_pose();
 void set_radio_pose(int pose);
 
+// The goggles' colour ([Goggles] Color); a new colour swaps the goggles live.
+int colour_count();
+const char *colour_label(int colour);
+int goggles_colour();
+void set_goggles_colour(int colour);
+
 }  // namespace gear
