@@ -25,14 +25,12 @@ api::effect_uniform_variable g_vars[VarCount];
 bool g_found = false;
 // The technique, switched on only in the FPV view so it costs nothing otherwise.
 api::effect_technique g_technique = {0};
-int g_technique_on = -1;  // -1 unknown: set on the first frame
-int g_refind = 0;         // frames until looking the uniforms up again
+int g_refind = 0;  // frames until looking the technique and uniforms up again
 
 void find(api::effect_runtime *runtime) {
     g_runtime = runtime;
     g_found = false;
     g_technique = {0};
-    g_technique_on = -1;
     runtime->enumerate_techniques(kEffect, [](api::effect_runtime *, api::effect_technique tech) { g_technique = tech; });
     for (auto &v : g_vars) v = {0};
     runtime->enumerate_uniform_variables(kEffect, [](api::effect_runtime *rt, api::effect_uniform_variable var) {
@@ -43,20 +41,23 @@ void find(api::effect_runtime *runtime) {
             if (std::strcmp(name, kNames[i]) == 0) g_vars[i] = var;
     });
     g_found = g_vars[Active].handle != 0;
+    if (g_technique.handle) return;
+    // ReShade compiles effects in the background after start and after a
+    // reload, so the effect can appear later: keep looking every 2 s.
+    g_refind = 120;
     static bool reported = false;
-    if (!g_technique.handle && !reported) {
+    if (!reported) {
         reported = true;
-        fpvlog::write("lens: %s is not in ReShade (copy it to reshade-shaders\\Shaders)", kEffect);
+        fpvlog::write("lens: %s is not in ReShade yet (copy it to reshade-shaders\\Shaders)", kEffect);
     }
 }
 
-// On in the FPV view, off otherwise. Enabling an effect ReShade skipped at
-// startup ("load only enabled effects") queues it for loading, so its
-// uniforms can appear a few frames later.
+// On in the FPV view, off otherwise, whatever the ReShade menu was set to.
+// Enabling an effect ReShade skipped at startup ("load only enabled effects")
+// queues it for loading, so its uniforms can appear a few frames later.
 void switch_technique(api::effect_runtime *runtime, bool on) {
-    if (!g_technique.handle || g_technique_on == int(on)) return;
+    if (!g_technique.handle || runtime->get_technique_state(g_technique) == on) return;
     runtime->set_technique_state(g_technique, on);
-    g_technique_on = on;
     if (on && !g_found) g_refind = 30;
 }
 
