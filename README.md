@@ -107,6 +107,17 @@ Copy these files into the game folder, next to `GTA5_Enhanced.exe`:
 | `libfpv.dll` | The game folder. This is the drone simulator. |
 | `GTAVE_FPV_Lens.fx` | `reshade-shaders\Shaders` |
 | `GTAVE_FPV_Bezel.png` | `reshade-shaders\Textures` |
+| `dlcpacks\gtavefpv\dlc.rpf` | The drone model (a DJI Avata 2). See below. |
+
+The drone model is an add-on dlcpack. With onigiri, copy the `gtavefpv`
+folder to `onigiri\dlcpacks`, and add this line before `</Paths>` in
+`onigiri\common\data\dlclist.xml`:
+
+```
+<Item>dlcpacks:/gtavefpv/</Item>
+```
+
+Without the pack, the mod uses a small game prop as the drone.
 
 Then do these steps:
 
@@ -247,6 +258,11 @@ what was tested in the game.
 - Alexander Blade: ScriptHookV. crosire: ReShade.
 - [stb_image](https://github.com/nothings/stb) by Sean Barrett: the PNG font
   loader.
+- The drone model: ["DJI Avata2"](https://sketchfab.com/3d-models/dji-avata2-e27ed758e2174a89a48368e84027f8d9)
+  by raphael.harris.gaffga, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
+  It was reduced, re-oriented and converted for GTA V with
+  [Sollumz](https://github.com/Sollumz/Sollumz) (`tools/avata2`). DJI and Avata
+  are trademarks of DJI. This mod is not affiliated with DJI.
 - Written with Claude (Anthropic).
 
 ## License

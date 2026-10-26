@@ -28,6 +28,18 @@ reshade-shaders\Shaders\GTAVE_FPV_Lens.fx
 reshade-shaders\Textures\GTAVE_FPV_Bezel.png
 ```
 
+The drone model is the `dlcpacks\gtavefpv` folder in this ZIP. With
+onigiri, copy that folder to `onigiri\dlcpacks`, and add this line before
+`</Paths>` in `onigiri\common\data\dlclist.xml`:
+
+```
+<Item>dlcpacks:/gtavefpv/</Item>
+```
+
+Without it, the mod uses a small game prop as the drone. The model is "DJI
+Avata2" by raphael.harris.gaffga, CC BY 4.0. See
+`dlcpacks\gtavefpv\CREDITS.txt`.
+
 ## 3. Turn on the lens effect
 
 1. Start the game and load story mode.

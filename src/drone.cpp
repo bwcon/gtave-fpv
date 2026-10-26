@@ -148,6 +148,10 @@ uint32_t pick_prop_model(const DroneSettings &s) {
         if (shv::call<bool>(nat::IS_MODEL_IN_CDIMAGE, hash)) return hash;
         fpvlog::write("drone model '%s' from GTAVE.FPV.ini is not in the game", s.model.c_str());
     }
+    // The mod's own quad (the gtavefpv dlcpack), at real scale.
+    uint32_t own = shv::call<uint32_t>(nat::GET_HASH_KEY, "gtavefpv_avata2");
+    if (shv::call<bool>(nat::IS_MODEL_IN_CDIMAGE, own)) return own;
+    fpvlog::write("drone model gtavefpv_avata2 not installed (dlcpacks/gtavefpv): using a game prop");
     // GTA cannot scale an entity, so pick the model whose size fits best.
     uint32_t chosen = 0;
     float best = 1e9f;
