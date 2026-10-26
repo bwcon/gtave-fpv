@@ -18,6 +18,9 @@ hammerill from GTA IV to GTA V Enhanced. It uses a fork of libfpv,
 
 - Real Betaflight in the loop, with your rates, modes and tuning. Set up your
   radio once in the setup wizard. Betaflight Configurator can connect too.
+- Drone models at real scale: a 5" freestyle quad whose props spin with the
+  motors (a destroyed prop disappears), and a DJI Avata 2 for 3" quads and
+  whoops. The quad preset picks the model, also when you change it in flight.
 - Three cameras: FPV (the goggles view), chase, and line of sight from where
   the player stands. The chase camera's distance, height and follow speed are
   on the Camera page in the GTAVE.FPV tab.
@@ -112,7 +115,7 @@ Copy these files into the game folder, next to `GTA5_Enhanced.exe`:
 | `libfpv.dll` | The game folder. This is the drone simulator. |
 | `GTAVE_FPV_Lens.fx` | `reshade-shaders\Shaders` |
 | `GTAVE_FPV_Bezel.png` | `reshade-shaders\Textures` |
-| `dlcpacks\gtavefpv\dlc.rpf` | The drone (a DJI Avata 2), the pilot's goggles and radio. See below. |
+| `dlcpacks\gtavefpv\dlc.rpf` | The drones (a 5" freestyle quad and a DJI Avata 2), the pilot's goggles and radio. See below. |
 
 The drone model is an add-on dlcpack. With onigiri, copy the `gtavefpv`
 folder to `onigiri\dlcpacks`, and add this line before `</Paths>` in
@@ -261,7 +264,9 @@ what was tested in the game.
 - Alexander Blade: ScriptHookV. crosire: ReShade.
 - [stb_image](https://github.com/nothings/stb) by Sean Barrett: the PNG font
   loader.
-- The drone model: ["DJI Avata2"](https://sketchfab.com/3d-models/dji-avata2-e27ed758e2174a89a48368e84027f8d9)
+- The 5" quad ("Neon Falcon") and its propeller: made by bwcon with
+  [Meshy AI](https://www.meshy.ai).
+- The 3" and whoop model: ["DJI Avata2"](https://sketchfab.com/3d-models/dji-avata2-e27ed758e2174a89a48368e84027f8d9)
   by raphael.harris.gaffga, [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/).
   It was reduced, re-oriented and converted for GTA V with
   [Sollumz](https://github.com/Sollumz/Sollumz) (`tools/models`). DJI and Avata

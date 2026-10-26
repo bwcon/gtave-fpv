@@ -2,6 +2,7 @@
 
 #include <windows.h>
 
+#include <algorithm>
 #include <atomic>
 #include <cmath>
 #include <cstdio>
@@ -71,6 +72,20 @@ LensState g_lens;
 // the world probes never hit it.
 int g_prop = 0;
 float g_prop_yaw[4] = {0, 0, 0, 1};  // model-to-drone yaw correction (GTAVE.FPV.ini)
+
+// The mod's own models (the gtavefpv dlcpack), at real scale: the 5" quad with
+// spinning props, and the Avata for 3" quads and whoops. GTA cannot scale an
+// entity, so the quad's size class (its motor radius) picks the model.
+enum SizeClass { Small, Five };
+constexpr float kFiveInchMotorRadius = 0.07f;  // metres from the centre; 5" quads ~0.11
+int g_size = -1;                               // the class g_prop was spawned for
+int g_spin[4] = {};                            // the 5" model's propellers
+float g_spin_angle[4] = {};
+bool g_spins = false;                          // g_prop has them
+// The 5" model's motor hubs (tools/models/prop.py ... cutprops prints them), and how
+// fast a prop may look to spin: faster aliases into a crawl at 60 fps.
+constexpr float kHubX = 0.089f, kHubY = 0.069f, kHubZ = 0.005f;
+constexpr float kMaxVisualRpm = 900.0f;
 
 // Candidate drone models, tried in order; the first one the game has wins
 // (the log lists which exist). Override with [Drone] Model= in GTAVE.FPV.ini.
@@ -143,16 +158,17 @@ float model_span(uint32_t hash) {
     return x > y ? x : y;
 }
 
-uint32_t pick_prop_model(const DroneSettings &s) {
+uint32_t pick_prop_model(const DroneSettings &s, SizeClass size) {
     if (!s.model.empty()) {
         uint32_t hash = shv::call<uint32_t>(nat::GET_HASH_KEY, s.model.c_str());
         if (shv::call<bool>(nat::IS_MODEL_IN_CDIMAGE, hash)) return hash;
         fpvlog::write("drone model '%s' from GTAVE.FPV.ini is not in the game", s.model.c_str());
     }
-    // The mod's own quad (the gtavefpv dlcpack), at real scale.
-    uint32_t own = shv::call<uint32_t>(nat::GET_HASH_KEY, "gtavefpv_avata2");
-    if (shv::call<bool>(nat::IS_MODEL_IN_CDIMAGE, own)) return own;
-    fpvlog::write("drone model gtavefpv_avata2 not installed (dlcpacks/gtavefpv): using a game prop");
+    for (const char *name : {size == Five ? "gtavefpv_falcon5" : "gtavefpv_avata2", "gtavefpv_avata2"}) {
+        uint32_t own = shv::call<uint32_t>(nat::GET_HASH_KEY, name);
+        if (shv::call<bool>(nat::IS_MODEL_IN_CDIMAGE, own)) return own;
+    }
+    fpvlog::write("the gtavefpv dlcpack is not installed: using a game prop as the drone");
     // GTA cannot scale an entity, so pick the model whose size fits best.
     uint32_t chosen = 0;
     float best = 1e9f;
@@ -169,13 +185,23 @@ uint32_t pick_prop_model(const DroneSettings &s) {
     return chosen;
 }
 
-void spawn_prop(const float pos[3]) {
+int spawn_object(uint32_t model, const float pos[3]) {
+    shv::call(nat::REQUEST_MODEL, model);
+    for (int i = 0; i < 200 && !shv::call<bool>(nat::HAS_MODEL_LOADED, model); ++i) shv::wait(0);
+    if (!shv::call<bool>(nat::HAS_MODEL_LOADED, model)) return 0;
+    int obj = shv::call<int>(nat::CREATE_OBJECT_NO_OFFSET, model, pos[0], pos[1], pos[2], false, false, false, 0);
+    shv::call(nat::SET_MODEL_AS_NO_LONGER_NEEDED, model);
+    if (obj) shv::call(nat::SET_ENTITY_COLLISION, obj, false, false);
+    return obj;
+}
+
+void spawn_prop(const float pos[3], SizeClass size) {
     const DroneSettings s = read_settings();
     const float yaw_offset = s.yaw_offset;
     float half = yaw_offset * 0.5f / kRadToDeg;
     g_prop_yaw[0] = 0, g_prop_yaw[1] = 0, g_prop_yaw[2] = std::sin(half), g_prop_yaw[3] = std::cos(half);
 
-    uint32_t model = pick_prop_model(s);
+    uint32_t model = pick_prop_model(s, size);
     if (!model) {
         fpvlog::write("no drone model found: the drone flies invisible");
         return;
@@ -198,15 +224,25 @@ void spawn_prop(const float pos[3]) {
     if (vehicle) shv::call(nat::SET_VEHICLE_ENGINE_ON, g_prop, false, true, true);
     fpvlog::write("drone model %08x spawned as %s %d (yaw offset %.0f)", model, vehicle ? "vehicle" : "object",
                   g_prop, yaw_offset);
+    // The 5" model's props are separate, so they can spin.
+    g_spins = model == shv::call<uint32_t>(nat::GET_HASH_KEY, "gtavefpv_falcon5");
+    const uint32_t prop = shv::call<uint32_t>(nat::GET_HASH_KEY, "gtavefpv_prop5");
+    for (int i = 0; g_spins && i < 4; ++i) g_spin[i] = spawn_object(prop, pos);
+}
+
+void delete_entity(int &e) {
+    if (e && shv::call<bool>(nat::DOES_ENTITY_EXIST, e)) {
+        shv::call(nat::SET_ENTITY_AS_MISSION_ENTITY, e, true, true);
+        shv::call(nat::DELETE_ENTITY, &e);  // objects and vehicles alike
+    }
+    e = 0;
 }
 
 void delete_prop() {
-    if (!g_prop) return;
-    if (shv::call<bool>(nat::DOES_ENTITY_EXIST, g_prop)) {
-        shv::call(nat::SET_ENTITY_AS_MISSION_ENTITY, g_prop, true, true);
-        shv::call(nat::DELETE_ENTITY, &g_prop);  // objects and vehicles alike
-    }
-    g_prop = 0;
+    for (int &e : g_spin) delete_entity(e);
+    g_spins = false;
+    delete_entity(g_prop);
+    g_size = -1;
 }
 
 // q * r for {x, y, z, w} quaternions.
@@ -218,7 +254,17 @@ void quat_mul(const float q[4], const float r[4], float out[4]) {
 }
 
 // Hidden in the FPV view, where the camera sits inside it.
-void update_prop(const fpv_frame &frame, bool fpv_view) {
+void update_prop(const fpv_frame &frame, bool fpv_view, float dt) {
+    // The quad's size class: its motors' distance from the centre (a preset
+    // change in the overlay swaps the model mid-flight).
+    float reach = 0;
+    for (const fpv_motor_state &m : frame.motors) reach += std::hypot(m.position[0], m.position[1]) / 4;
+    const int size = reach >= kFiveInchMotorRadius ? Five : Small;
+    if (size != g_size) {
+        delete_prop();
+        spawn_prop(frame.position, SizeClass(size));
+        g_size = size;
+    }
     if (!g_prop) return;
     float q[4];
     quat_mul(frame.rotation, g_prop_yaw, q);
@@ -226,6 +272,17 @@ void update_prop(const fpv_frame &frame, bool fpv_view) {
               false, false, false);
     shv::call(nat::SET_ENTITY_QUATERNION, g_prop, q[0], q[1], q[2], q[3]);
     shv::call(nat::SET_ENTITY_VISIBLE, g_prop, !fpv_view, false);
+    // Each prop on its model hub (the motor's quadrant), turning its motor's way;
+    // a destroyed prop is gone.
+    for (int i = 0; g_spins && i < 4; ++i) {
+        if (!g_spin[i]) continue;
+        const fpv_motor_state &m = frame.motors[i];
+        g_spin_angle[i] = std::fmod(g_spin_angle[i] - m.spin_direction * std::min(m.rpm, kMaxVisualRpm) / 60.0f * 360.0f * dt, 360.0f);
+        shv::call(nat::ATTACH_ENTITY_TO_ENTITY, g_spin[i], g_prop, 0, m.position[0] < 0 ? -kHubX : kHubX,
+                  m.position[1] < 0 ? -kHubY : kHubY, kHubZ, 0.0f, 0.0f, g_spin_angle[i], false, false, false, false, 2,
+                  true, 0);
+        shv::call(nat::SET_ENTITY_VISIBLE, g_spin[i], !fpv_view && m.prop_damage < 0.99f, false);
+    }
 }
 
 // Everything the render thread draws from: OSD, goggles HUD and lens effect.
@@ -408,7 +465,7 @@ void start() {
     }
     fpv.fpv_world_set_raycast_callback(&world::raycast, nullptr);
     fpv.fpv_gps_set_home(nullptr);  // home is where the drone arms, as on a real quad
-    spawn_prop(g_spawn_pos);
+    g_size = -1;  // the first frame spawns the model for the quad's size
     gear::start(g_ped);
     g_was_armed = false;
 
@@ -654,7 +711,7 @@ void tick() {
 
     const bool fpv_view = g_view == View::Fpv;
     apply_camera(fpv_view ? frame.camera : g_view == View::Chase ? frame.chase_camera : frame.los_camera, fpv_view);
-    update_prop(frame, fpv_view);
+    update_prop(frame, fpv_view, dt);
     gear::tick(g_ped);
     race::tick(frame, !fpv.fpv_overlay_wants_input());
     publish_osd(&frame, fpv_view);

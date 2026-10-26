@@ -52,11 +52,67 @@ me = obj.data
 me.transform(obj.matrix_world)
 obj.matrix_world = mathutils.Matrix.Identity(4)
 me.transform(mathutils.Matrix.Rotation(math.radians(TURN), 4, "Z"))
-xs = [v.co.x for v in me.vertices]
-me.transform(mathutils.Matrix.Scale(WIDTH / (max(xs) - min(xs)), 4))
-lo = mathutils.Vector([min(v.co[i] for v in me.vertices) for i in range(3)])
-hi = mathutils.Vector([max(v.co[i] for v in me.vertices) for i in range(3)])
-me.transform(mathutils.Matrix.Translation(-(lo + hi) / 2))
+
+if "cutprops" in args:
+    # A quad with its props modelled in: the mod spins separate props instead. The
+    # props are the faces in a thin band at the four outer corners, around each motor
+    # hub; the hubs then set the scale (WIDTH = the hub diagonal, motor to motor) and
+    # the origin (the hubs' centre, 5 mm under the prop plane, like libfpv's motors).
+    import bmesh
+    bm = bmesh.new()
+    bm.from_mesh(me)
+    zs = [v.co.z for v in bm.verts]
+    height = max(zs) - min(zs)
+    reach = max(math.hypot(v.co.x, v.co.y) for v in bm.verts)
+    centres = [(f, f.calc_center_median()) for f in bm.faces]
+    hubs = []
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            outer = [c for f, c in centres if c.x * sx > 0 and c.y * sy > 0 and math.hypot(c.x, c.y) > 0.6 * reach]
+            # the prop plane: the most crowded height out there
+            counts = {}
+            for c in outer:
+                k = round(c.z / (0.02 * height))
+                counts[k] = counts.get(k, 0) + 1
+            plane = max(counts, key=counts.get) * 0.02 * height
+            ring = [c for c in outer if abs(c.z - plane) < 0.075 * height]
+            hubs.append(mathutils.Vector((sum(c.x for c in ring) / len(ring), sum(c.y for c in ring) / len(ring), plane)))
+    plane = sum(h.z for h in hubs) / 4
+    radius = reach - sum(math.hypot(h.x, h.y) for h in hubs) / 4  # the prop tips are the reach
+    # Near a hub, everything above the motor bell is prop; past the hubs (plus a bell)
+    # there is only prop, at any height. The centre column (the FPV camera sits at
+    # the props' height) is never a prop.
+    hub_reach = sum(math.hypot(h.x, h.y) for h in hubs) / 4
+    cut = [f for f, c in centres if abs(c.x) > 0.18 * reach and (
+           (c.z > plane - 0.1 * height and min(math.hypot(c.x - h.x, c.y - h.y) for h in hubs) < radius * 1.8)
+           or math.hypot(c.x, c.y) > hub_reach + 0.35 * radius)]
+    bmesh.ops.delete(bm, geom=cut, context="FACES")
+    bm.to_mesh(me)
+    bm.free()
+    diag = sum(math.hypot(h.x, h.y) for h in hubs) / 4 * 2
+    s = WIDTH / diag
+    centre = sum(hubs, mathutils.Vector()) / 4
+    me.transform(mathutils.Matrix.Scale(s, 4) @ mathutils.Matrix.Translation(-mathutils.Vector((centre.x, centre.y, plane))))
+    me.transform(mathutils.Matrix.Translation((0, 0, 0.005)))
+    print("CUT", len(cut), "faces; prop radius %.3f m" % (radius * s))
+    for h in hubs:
+        print("HUB %.4f %.4f %.4f" % ((h.x - centre.x) * s, (h.y - centre.y) * s, 0.005))
+elif "hub" in args:
+    # A propeller: centred on its hub (the blades are symmetric, so the vertices'
+    # mean is the hub), WIDTH = the tip circle's diameter.
+    n = len(me.vertices)
+    hub = mathutils.Vector((sum(v.co.x for v in me.vertices) / n, sum(v.co.y for v in me.vertices) / n, 0))
+    zs = [v.co.z for v in me.vertices]
+    hub.z = (max(zs) + min(zs)) / 2
+    me.transform(mathutils.Matrix.Translation(-hub))
+    tip = max(math.hypot(v.co.x, v.co.y) for v in me.vertices)
+    me.transform(mathutils.Matrix.Scale(WIDTH / 2 / tip, 4))
+else:
+    xs = [v.co.x for v in me.vertices]
+    me.transform(mathutils.Matrix.Scale(WIDTH / (max(xs) - min(xs)), 4))
+    lo = mathutils.Vector([min(v.co[i] for v in me.vertices) for i in range(3)])
+    hi = mathutils.Vector([max(v.co[i] for v in me.vertices) for i in range(3)])
+    me.transform(mathutils.Matrix.Translation(-(lo + hi) / 2))
 print("SIZE", [round(d, 3) for d in obj.dimensions])
 
 dec = obj.modifiers.new("decimate", "DECIMATE")
