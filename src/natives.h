@@ -49,6 +49,7 @@ constexpr uint64_t DESTROY_CAM = 0x865908C81A2C22E9;  // (cam, bool)
 constexpr uint64_t SET_GAMEPLAY_CAM_RELATIVE_HEADING = 0xB4EC2312F4E5B1F1;
 
 constexpr uint64_t SET_FOCUS_POS_AND_VEL = 0xBB7454BAFF08FE25;  // streaming focus (x, y, z, vx, vy, vz)
+constexpr uint64_t REQUEST_COLLISION_AT_COORD = 0x07503F7948F491A7;  // (x, y, z)
 constexpr uint64_t CLEAR_FOCUS = 0x31B73D1EA9F01DA2;
 
 constexpr uint64_t HIDE_HUD_AND_RADAR_THIS_FRAME = 0x719FF505F097FD20;

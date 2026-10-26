@@ -107,14 +107,12 @@ void draw(api::effect_runtime *runtime) {
     draw_status();
 
     ImVec2 avail = render::msvc_vec2(imgui_function_table_instance()->GetContentRegionAvail);
-    // Inside the Add-ons list the area is as tall as what is left of the
-    // window, often only a few lines: give libfpv's pages room, the list scrolls.
     if (avail.x < 400) avail.x = 400;
-    if (avail.y < 640) avail.y = 640;
+    if (avail.y < 400) avail.y = 400;
     const ImVec2 origin = render::msvc_vec2(imgui_function_table_instance()->GetCursorScreenPos);
     fpv.fpv_overlay_set_open(1);
     fpv.fpv_overlay_set_display(avail.x, avail.y, 1.0f);
-    if (fpv.fpv_overlay_set_embedded) fpv.fpv_overlay_set_embedded(1);  // the add-on settings are its window
+    if (fpv.fpv_overlay_set_embedded) fpv.fpv_overlay_set_embedded(1);  // the tab is its window
     // Takes the mouse over the area, so ReShade does not drag its window instead.
     ImGui::InvisibleButton("##libfpv", avail,
                            ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight |

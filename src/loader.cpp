@@ -121,7 +121,7 @@ void try_register_addon() {
         ReleaseSRWLockExclusive(&g_register_lock);
         return;
     }
-    reshade::register_overlay(nullptr, &on_tab);  // inline, in the add-on's settings on the Add-ons page
+    reshade::register_overlay("GTAVE.FPV", &on_tab);  // its own tab: dockable, like other add-ons
     reshade::register_event<reshade::addon_event::destroy_device>(&on_destroy_device);
     reshade::register_event<reshade::addon_event::reshade_overlay>(&on_overlay);
     reshade::register_event<reshade::addon_event::reshade_begin_effects>(&on_begin_effects);
@@ -215,7 +215,7 @@ BOOL APIENTRY DllMain(HMODULE module, DWORD reason, LPVOID reserved) {
     } else if (reason == DLL_PROCESS_DETACH && reserved == nullptr) {
         // Only on a real unload. At process exit ReShade may already be gone.
         if (g_addon) {
-            reshade::unregister_overlay(nullptr, &on_tab);
+            reshade::unregister_overlay("GTAVE.FPV", &on_tab);
             reshade::unregister_event<reshade::addon_event::destroy_device>(&on_destroy_device);
             reshade::unregister_event<reshade::addon_event::reshade_overlay>(&on_overlay);
             reshade::unregister_event<reshade::addon_event::reshade_begin_effects>(&on_begin_effects);

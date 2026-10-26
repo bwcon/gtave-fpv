@@ -61,8 +61,8 @@ hammerill from GTA IV to GTA V Enhanced. It uses a fork of libfpv,
 | L | Load the next saved race, or turn races off |
 
 All libfpv settings (radio setup, rates, OSD layout, fonts, camera and quad)
-are in ReShade. Press Home, open the Add-ons page, and expand GTAVE.FPV. The
-settings show right under it.
+are in ReShade. Press Home and open the GTAVE.FPV tab. Like other add-on tabs,
+you can undock it and drag it to another place.
 
 The goggles view has its own settings in ReShade's Home page. Select the
 "GTAVE.FPV lens" effect, and the settings show below the effect list:
@@ -125,8 +125,7 @@ Then do these steps:
 2. Press Home to open ReShade, and turn on the "GTAVE.FPV lens" effect. Keep
    it on: the mod shows the lens only in the FPV view.
 3. Press F9 to launch the drone.
-4. Open the GTAVE.FPV settings (ReShade's Add-ons page) and follow the radio
-   setup wizard once.
+4. Open the GTAVE.FPV tab in ReShade and follow the radio setup wizard once.
 
 If you turn the effect off and ReShade has "Load only enabled effects" set,
 ReShade skips the effect on the next start, and the mod cannot turn it on.
@@ -137,8 +136,7 @@ Turn it on again in the Home page.
 1. Make the folder `%APPDATA%\libfpv\fonts`.
 2. Copy each font package into it as its own folder, with the files unchanged.
    For example, `fonts\SNEAKY_FPV_O3_CLASH_BTFL\BTFL_CLASH_O3.png`.
-3. In the GTAVE.FPV settings, open the OSD page and pick the font in the Font
-   list.
+3. In the GTAVE.FPV tab, open the OSD page and pick the font in the Font list.
 
 The mod uses these files:
 
@@ -156,7 +154,7 @@ The mod uses these files:
   the DVR mode. A crash bends the propellers. By default the mod fits new
   ones when you disarm, and keeps the battery as it is.
 
-The GTAVE.FPV settings have three flight options:
+The GTAVE.FPV tab has three flight options:
 
 - Full realism: bent props stay bent until P or R (`[Drone] NewPropsOnDisarm=0`).
 - Repair on arm: every arm gives new props, cool motors and a full battery

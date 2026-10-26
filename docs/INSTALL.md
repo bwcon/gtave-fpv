@@ -50,8 +50,7 @@ Avata2" by raphael.harris.gaffga, CC BY 4.0. See
 ## 4. Fly
 
 1. Press F9. A drone launches in front of you.
-2. Press Home, open the Add-ons page, and expand GTAVE.FPV. Its settings show
-   right under it.
+2. Press Home and open the GTAVE.FPV tab.
 3. Follow the radio setup wizard once. The keyboard also works: Enter arms,
    W and S are throttle, A and D are yaw, and the arrow keys are pitch and
    roll.

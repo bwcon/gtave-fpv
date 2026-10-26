@@ -456,7 +456,21 @@ void stop() {
 }
 
 // A new drone at the launch spot (R).
-void respawn() {
+// R. The launch spot's collision unloads once the drone has flown away, and a
+// drone reset onto missing ground falls through it: stream the spot back in
+// first, then reset (respawn_when_loaded, every tick).
+int g_respawn_wait = 0;  // ticks left to wait for the launch spot's ground
+void respawn() { g_respawn_wait = 120; }
+
+void respawn_when_loaded() {
+    shv::call(nat::SET_FOCUS_POS_AND_VEL, g_spawn_pos[0], g_spawn_pos[1], g_spawn_pos[2], 0.0f, 0.0f, 0.0f);
+    shv::call(nat::REQUEST_COLLISION_AT_COORD, g_spawn_pos[0], g_spawn_pos[1], g_spawn_pos[2]);
+    float origin[3] = {g_spawn_pos[0], g_spawn_pos[1], g_spawn_pos[2] + 1.0f}, down[3] = {0, 0, -1};
+    fpv_raycast_hit hit{};
+    const bool ground = world::raycast(nullptr, origin, down, 3.0f, &hit) != 0;
+    if (!ground && --g_respawn_wait > 0) return;
+    if (!ground) fpvlog::write("respawn: no ground at the launch spot after 120 ticks, resetting anyway");
+    g_respawn_wait = 0;
     fpv.fpv_drone_repair(g_drone);
     fpv.fpv_drone_reset(g_drone, g_spawn_pos, g_spawn_rot);
     g_first_sim_time = -1;
@@ -628,9 +642,12 @@ void tick() {
     g_frame = frame;
 
     // Stream map detail, collision and traffic around the drone, not the
-    // player standing at the launch spot.
-    shv::call(nat::SET_FOCUS_POS_AND_VEL, frame.position[0], frame.position[1], frame.position[2],
-              frame.velocity[0], frame.velocity[1], frame.velocity[2]);
+    // player standing at the launch spot (around the launch spot while R waits).
+    if (g_respawn_wait > 0)
+        respawn_when_loaded();
+    else
+        shv::call(nat::SET_FOCUS_POS_AND_VEL, frame.position[0], frame.position[1], frame.position[2],
+                  frame.velocity[0], frame.velocity[1], frame.velocity[2]);
 
     const bool fpv_view = g_view == View::Fpv;
     apply_camera(fpv_view ? frame.camera : g_view == View::Chase ? frame.chase_camera : frame.los_camera, fpv_view);
