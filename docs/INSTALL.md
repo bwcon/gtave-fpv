@@ -36,10 +36,8 @@ onigiri, copy that folder to `onigiri\dlcpacks`, and add this line before
 <Item>dlcpacks:/gtavefpv/</Item>
 ```
 
-Without it, the mod uses a small game prop as the drone. The model is "DJI
-Avata2" by raphael.harris.gaffga, the goggles are "Tripo FPV DJI Goggles" by
-line-o, and the radio is "Radiomaster TX12 rc radio controller" by
-flightclubua, all CC BY 4.0. See `dlcpacks\gtavefpv\CREDITS.txt`.
+Without it, the mod uses a small game prop as the drone. The models are CC BY
+4.0. `dlcpacks\gtavefpv\CREDITS.txt` names their authors.
 
 ## 3. Turn on the lens effect
 
@@ -70,6 +68,16 @@ flightclubua, all CC BY 4.0. See `dlcpacks\gtavefpv\CREDITS.txt`.
 | E | Races: mark the finish gate and save a point to point race |
 
 Turn off DLSS frame generation for FPV flying, because it adds input latency.
+
+## Races and tracks
+
+Races are saved in the `fpv-data\races` folder in the game folder. The
+GTAVE.FPV tab sets the laps per race and shows the loaded track:
+
+- Copy track puts the track on the clipboard as text, to share it.
+- Paste track saves and loads a track that someone shared with you.
+- Your personal best (PB) for each track is in `fpv-data\races\bests.txt`.
+- Your best lap flies along as a see-through ghost. Turn it off in the tab.
 
 ## Betaflight Configurator
 
