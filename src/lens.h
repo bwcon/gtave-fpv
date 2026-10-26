@@ -12,4 +12,7 @@ void begin_effects(reshade::api::effect_runtime *runtime);
 // reshade_reloaded_effects / init: the uniform handles changed.
 void forget(reshade::api::effect_runtime *runtime);
 
+// G: flips the effect's Goggles setting and saves the ReShade preset. Any thread.
+void toggle_goggles();
+
 }  // namespace lens

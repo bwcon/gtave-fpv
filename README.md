@@ -27,7 +27,10 @@ hammerill from GTA IV to GTA V Enhanced. It uses a fork of libfpv,
   sheets or WTFOS `.bin` fonts) and pick one in the OSD settings.
 - Goggles view: a fisheye lens, a goggles bezel around the picture, and a
   video look for each style. Analog has noise, tearing and breakup. Digital
-  has block artifacts and freezes. The lens shader runs only in the FPV view.
+  has block artifacts and freezes. The lens shader works only in the FPV view.
+- Radio signal: the OSD RSSI and RSSI dBm drop with the distance to where you
+  pressed F9, and behind buildings.
+- GPS home is where the drone arms, as on a real quad.
 - Collision with the world: buildings, the road, cars, peds and props, through
   the game's shape test probes.
 - Motor sound from the libfpv synthesizer.
@@ -52,6 +55,17 @@ hammerill from GTA IV to GTA V Enhanced. It uses a fork of libfpv,
 All libfpv settings (radio setup, rates, OSD layout, fonts, camera and quad)
 are in the ReShade overlay. Press Home, open the Add-ons page, and open the
 GTAVE.FPV tab.
+
+The goggles view has its own settings in ReShade's Home page. Select the
+"GTAVE.FPV lens" effect, and the settings show below the effect list:
+
+- Goggles: the goggles frame on or off (G does the same in the game).
+- Goggles size: 1 fills the window. A smaller value shows black around the
+  goggles, and a larger value enlarges the picture.
+- Camera FOV (vertical): the same setting as the Camera page in the GTAVE.FPV
+  tab.
+- Video signal: Auto (analog with the analog OSD, digital with the HD OSD),
+  Analog, Digital, or Clean (no interference).
 
 Without a radio, the keyboard works as a fallback. Enter arms, W and S are
 throttle, A and D are yaw, and the arrow keys are pitch and roll. A gamepad
@@ -85,13 +99,14 @@ Copy these files into the game folder, next to `GTA5_Enhanced.exe`:
 Then do these steps:
 
 1. Start the game and load story mode.
-2. Press Home to open ReShade, and turn on the `GTAVE_FPV_Lens` effect. The mod
-   switches it on and off by itself after that.
+2. Press Home to open ReShade, and turn on the "GTAVE.FPV lens" effect. Keep
+   it on: the mod shows the lens only in the FPV view.
 3. Press F9 to launch the drone.
 4. Open the GTAVE.FPV tab in ReShade and follow the radio setup wizard once.
 
-If ReShade has "Load only enabled effects" set, the lens shader loads a few
-frames after you first enter the FPV view. This is normal.
+If you turn the effect off and ReShade has "Load only enabled effects" set,
+ReShade skips the effect on the next start, and the mod cannot turn it on.
+Turn it on again in the Home page.
 
 ### Goggle fonts
 
@@ -112,8 +127,8 @@ The mod uses these files:
 - `%APPDATA%\libfpv`: libfpv settings, radio mappings and Betaflight
   settings. The standalone libfpv app and other libfpv games share this
   folder.
-- `GTAVE.FPV.ini` in the game folder: the drone model, the bezel and the DVR
-  mode. Set `[DVR] Mode=off` to turn off the ShadowPlay recording.
+- `GTAVE.FPV.ini` in the game folder: the drone model, the bezel opening and
+  the DVR mode. Set `[DVR] Mode=off` to turn off the ShadowPlay recording.
 - `GTAVE.FPV.log` in the game folder: the mod log.
 
 ## Tune it in Betaflight Configurator

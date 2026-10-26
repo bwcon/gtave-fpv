@@ -1,5 +1,6 @@
 #include "render.h"
 
+#include <algorithm>
 #include <atomic>
 
 #include "fpvapi.h"
@@ -115,6 +116,8 @@ void set_screen(float width, float height) {
     g_screen_h = height;
 }
 void set_bezel(bool on) { g_bezel = on; }
+std::atomic<float> g_bezel_scale{1.0f};
+void set_bezel_scale(float scale) { g_bezel_scale = scale > 0.1f ? scale : 1.0f; }
 bool bezel() { return g_bezel; }
 
 // The bezel image's opening as window fractions (tools/key_bezel.py prints it).
@@ -130,7 +133,10 @@ void set_bezel_rect(float x0, float y0, float x1, float y1) {
 Rect picture_rect(bool) {
     const float w = g_screen_w, h = g_screen_h;
     if (!g_bezel) return {0, 0, w, h};
-    return {g_bezel_rect[0] * w, g_bezel_rect[1] * h, g_bezel_rect[2] * w, g_bezel_rect[3] * h};
+    // the image is scaled about the window centre; a picture larger than the window is cut at its edges
+    const float s = g_bezel_scale;
+    auto at = [s](float f, float size) { return std::min(std::max(0.5f + (f - 0.5f) * s, 0.0f), 1.0f) * size; };
+    return {at(g_bezel_rect[0], w), at(g_bezel_rect[1], h), at(g_bezel_rect[2], w), at(g_bezel_rect[3], h)};
 }
 
 Rect picture_rect_of_window() { return {0, 0, g_screen_w, g_screen_h}; }

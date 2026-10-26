@@ -11,6 +11,7 @@
 #include "audio.h"
 #include "dvr.h"
 #include "fpvapi.h"
+#include "lens.h"
 #include "log.h"
 #include "natives.h"
 #include "radio.h"
@@ -107,9 +108,9 @@ DroneSettings read_settings() {
     return s;
 }
 
-// [View] Bezel: the goggles bezel around the FPV picture (G toggles it), and
-// BezelRect: its image's opening as window fractions, from tools/key_bezel.py.
-bool read_bezel() {
+// [View] BezelRect: the bezel image's opening as window fractions, from
+// tools/key_bezel.py. The bezel itself is switched in the ReShade effect.
+void read_bezel_rect() {
     const std::string ini = ini_path();
     char buf[96];
     GetPrivateProfileStringA("View", "BezelRect", "", buf, sizeof buf, ini.c_str());
@@ -119,9 +120,7 @@ bool read_bezel() {
     }
     float r[4];
     if (std::sscanf(buf, "%f,%f,%f,%f", &r[0], &r[1], &r[2], &r[3]) == 4) render::set_bezel_rect(r[0], r[1], r[2], r[3]);
-    return GetPrivateProfileIntA("View", "Bezel", 1, ini.c_str()) != 0;
 }
-void save_bezel(bool on) { WritePrivateProfileStringA("View", "Bezel", on ? "1" : "0", ini_path().c_str()); }
 
 // Largest horizontal extent of a model, metres.
 float model_span(uint32_t hash) {
@@ -391,13 +390,11 @@ void start() {
         return;
     }
     fpv.fpv_world_set_raycast_callback(&world::raycast, nullptr);
-    float home[3] = {p.x, p.y, p.z};
-    fpv.fpv_gps_set_home(home);
+    fpv.fpv_gps_set_home(nullptr);  // home is where the drone arms, as on a real quad
     spawn_prop(g_spawn_pos);
 
     hold_player(true);
-    render::set_bezel(read_bezel());
-    save_bezel(render::bezel());  // writes the key on first use, so the ini documents it
+    read_bezel_rect();
     g_cam = shv::call<int>(nat::CREATE_CAM, "DEFAULT_SCRIPTED_CAMERA", false);
     shv::call(nat::SET_CAM_ACTIVE, g_cam, true);
     shv::call(nat::RENDER_SCRIPT_CAMS, true, false, 0, true, false, 0);
@@ -556,10 +553,7 @@ void tick() {
         if (key_pressed('C')) g_view = View((int(g_view) + 1) % int(View::Count));
         if (key_pressed('R')) respawn();
         if (key_pressed('O')) fpvapi::toggle_osd_style();
-        if (key_pressed('G')) {
-            render::set_bezel(!render::bezel());
-            save_bezel(render::bezel());
-        }
+        if (key_pressed('G')) lens::toggle_goggles();
         if (key_pressed('Y')) {
             move_player_here();
             return;
@@ -585,9 +579,6 @@ void tick() {
     // player standing at the launch spot.
     shv::call(nat::SET_FOCUS_POS_AND_VEL, frame.position[0], frame.position[1], frame.position[2],
               frame.velocity[0], frame.velocity[1], frame.velocity[2]);
-    shv::Vec3 p = ped_position();
-    float home[3] = {p.x, p.y, p.z};
-    fpv.fpv_gps_set_home(home);
 
     const bool fpv_view = g_view == View::Fpv;
     apply_camera(fpv_view ? frame.camera : g_view == View::Chase ? frame.chase_camera : frame.los_camera, fpv_view);

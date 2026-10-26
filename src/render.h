@@ -32,6 +32,8 @@ void set_screen(float width, float height);
 
 // Goggles bezel on or off (G key). Any thread.
 void set_bezel(bool on);
+// The bezel image's size: 1 fills the window. Any thread.
+void set_bezel_scale(float scale);
 bool bezel();
 
 // The bezel image's opening, as window fractions ([View] BezelRect). Any thread.
