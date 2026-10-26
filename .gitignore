@@ -7,3 +7,4 @@ build/
 *.wft
 backups/
 dist/
+__pycache__/
