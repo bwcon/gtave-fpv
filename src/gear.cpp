@@ -16,9 +16,11 @@ namespace {
 constexpr int kHat = 0, kGlasses = 1;  // ped prop slots
 constexpr int kAnimLoopUpperBody = 1 | 16 | 32;  // loop, upper body only, the player can still be moved
 
-// The radio's holds. The texter keeps both hands on the phone, thumbs moving;
-// the tourist holds a map in both hands; the tablet reader holds it in the left
-// hand and swipes with the right.
+// The radio's holds (names from the game's animation list). The texter keeps
+// both hands on the phone, thumbs moving; Arena War's drone station operator
+// holds a tablet controller in both hands (a seated clip, played upper body
+// only); the tourist holds a map in both hands; the tablet reader holds it in
+// the left hand and swipes with the right.
 struct Pose {
     const char *key, *label, *dict, *anim;
     int bone;  // ped bone id
@@ -26,6 +28,9 @@ struct Pose {
 };
 const Pose kPoses[] = {
     {"texting", "Both hands, thumbs (texting)", "amb@world_human_stand_mobile@male@text@base", "base",
+     28422,  // PH_R_Hand
+     {true, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}}},
+    {"arena", "Both hands, drone controller (Arena War)", "anim@arena@amb@seat_drone_tablet@male@", "base",
      28422,  // PH_R_Hand
      {true, {0.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 0.0f}}},
     {"map", "Both hands (reading a map)", "amb@world_human_tourist_map@male@base", "base", 28422,  // PH_R_Hand
