@@ -5,7 +5,7 @@ https://sketchfab.com/3d-models/dji-avata2-e27ed758e2174a89a48368e84027f8d9
 Reduced (decimated), re-oriented and its materials baked for GTA V.
 
 Needs Blender 5.1 with Sollumz 2.9 (and its szio and PyMateria packages):
-    blender --background --python tools/avata2/build_model.py -- <model.glb> <out dir>
+    blender --background --python tools/models/avata2.py -- <model.glb> <out dir>
 Writes <out dir>/gtavefpv_avata2.ydr and gtavefpv_avata2.ytyp (GEN9, for GTA V Enhanced),
 plus <out dir>/build.blend for inspection.
 """

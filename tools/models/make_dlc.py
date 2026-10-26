@@ -1,9 +1,9 @@
 """Packs the exported drone model into a dlcpack (dlcpacks/gtavefpv/dlc.rpf).
 
-    python tools/avata2/make_dlc.py <dir with gtavefpv_avata2.ydr/.ytd/.ytyp> <out dir>
+    python tools/models/make_dlc.py <dir with the models' .ydr/.ytd/.ytyp> <out dir>
 
-The pack streams the model from x64/gtavefpv.rpf and registers its archetype
-(DLC_ITYP_REQUEST), so scripts can spawn "gtavefpv_avata2" by name. Add
+The pack streams every model in the dir from x64/gtavefpv.rpf and registers
+their archetypes (DLC_ITYP_REQUEST), so scripts can spawn them by name. Add
 <Item>dlcpacks:/gtavefpv/</Item> to dlclist.xml (onigiri: onigiri/common/data/dlclist.xml).
 """
 import os
@@ -13,7 +13,6 @@ sys.path.insert(0, os.path.dirname(__file__))
 import rpf7  # noqa: E402
 
 PACK = "gtavefpv"
-MODEL = "gtavefpv_avata2"
 
 CONTENT = f"""<?xml version="1.0" encoding="UTF-8"?>
 <CDataFileMgr__ContentsOfDataFileXml>
@@ -28,14 +27,7 @@ CONTENT = f"""<?xml version="1.0" encoding="UTF-8"?>
       <disabled value="true" />
       <persistent value="true" />
     </Item>
-    <Item>
-      <filename>dlc_{PACK}:/%PLATFORM%/{PACK}.rpf/{MODEL}.ytyp</filename>
-      <fileType>DLC_ITYP_REQUEST</fileType>
-      <overlay value="false" />
-      <disabled value="true" />
-      <persistent value="true" />
-    </Item>
-  </dataFiles>
+{{ITYPS}}  </dataFiles>
   <contentChangeSets>
     <Item>
       <changeSetName>{PACK.upper()}_AUTOGEN</changeSetName>
@@ -44,8 +36,7 @@ CONTENT = f"""<?xml version="1.0" encoding="UTF-8"?>
       <filesToDisable />
       <filesToEnable>
         <Item>dlc_{PACK}:/%PLATFORM%/{PACK}.rpf</Item>
-        <Item>dlc_{PACK}:/%PLATFORM%/{PACK}.rpf/{MODEL}.ytyp</Item>
-      </filesToEnable>
+{{ENABLE}}      </filesToEnable>
       <txdToLoad />
       <txdToUnload />
       <residentResources />
@@ -83,8 +74,19 @@ SETUP = f"""<?xml version="1.0" encoding="UTF-8"?>
 """
 
 src, out = sys.argv[1], sys.argv[2]
-inner = rpf7.build({f"{MODEL}.{ext}": ("res", *rpf7.read_resource(os.path.join(src, f"{MODEL}.{ext}")))
-                    for ext in ("ydr", "ytd", "ytyp")})
+files = sorted(f for f in os.listdir(src) if f.endswith((".ydr", ".ytd", ".ytyp")))
+ITEM = """    <Item>
+      <filename>dlc_{pack}:/%PLATFORM%/{pack}.rpf/{f}</filename>
+      <fileType>DLC_ITYP_REQUEST</fileType>
+      <overlay value="false" />
+      <disabled value="true" />
+      <persistent value="true" />
+    </Item>
+"""
+ytyps = [f for f in files if f.endswith(".ytyp")]
+CONTENT = CONTENT.replace("{ITYPS}", "".join(ITEM.format(pack=PACK, f=f) for f in ytyps)).replace(
+    "{ENABLE}", "".join(f"        <Item>dlc_{PACK}:/%PLATFORM%/{PACK}.rpf/{f}</Item>\n" for f in ytyps))
+inner = rpf7.build({f: ("res", *rpf7.read_resource(os.path.join(src, f))) for f in files})
 dlc = rpf7.build({"content.xml": CONTENT.encode(), "setup2.xml": SETUP.encode(), "x64": {f"{PACK}.rpf": inner}})
 os.makedirs(os.path.join(out, PACK), exist_ok=True)
 path = os.path.join(out, PACK, "dlc.rpf")

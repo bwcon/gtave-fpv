@@ -13,6 +13,7 @@
 #include "audio.h"
 #include "dvr.h"
 #include "fpvapi.h"
+#include "goggles.h"
 #include "lens.h"
 #include "log.h"
 #include "natives.h"
@@ -408,6 +409,7 @@ void start() {
     fpv.fpv_world_set_raycast_callback(&world::raycast, nullptr);
     fpv.fpv_gps_set_home(nullptr);  // home is where the drone arms, as on a real quad
     spawn_prop(g_spawn_pos);
+    goggles::start(g_ped);
     g_was_armed = false;
 
     hold_player(true);
@@ -443,6 +445,7 @@ void stop() {
     }
     shv::call(nat::CLEAR_FOCUS);
     delete_prop();
+    goggles::stop(g_ped);
     publish_osd(nullptr, false);
     hold_player(false);
     if (g_drone) {
@@ -652,6 +655,7 @@ void tick() {
     const bool fpv_view = g_view == View::Fpv;
     apply_camera(fpv_view ? frame.camera : g_view == View::Chase ? frame.chase_camera : frame.los_camera, fpv_view);
     update_prop(frame, fpv_view);
+    goggles::tick(g_ped);
     race::tick(frame, !fpv.fpv_overlay_wants_input());
     publish_osd(&frame, fpv_view);
     const bool armed = (frame.flags & FPV_DRONE_ARMED) != 0;

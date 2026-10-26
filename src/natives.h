@@ -50,6 +50,15 @@ constexpr uint64_t SET_GAMEPLAY_CAM_RELATIVE_HEADING = 0xB4EC2312F4E5B1F1;
 
 constexpr uint64_t SET_FOCUS_POS_AND_VEL = 0xBB7454BAFF08FE25;  // streaming focus (x, y, z, vx, vy, vz)
 constexpr uint64_t REQUEST_COLLISION_AT_COORD = 0x07503F7948F491A7;  // (x, y, z)
+
+// Ped bones and props (the pilot's goggles).
+constexpr uint64_t GET_PED_BONE_INDEX = 0x3F428D08BE5AAE31;  // (ped, bone id) -> index
+// (entity, target, bone, x, y, z, rx, ry, rz, p9, softPinning, collision, isPed, rotOrder, syncRot, p15)
+constexpr uint64_t ATTACH_ENTITY_TO_ENTITY = 0x6B9BBD38AB0796DF;
+constexpr uint64_t GET_PED_PROP_INDEX = 0x898CC20EA75BACD8;          // (ped, slot, p2) -> drawable, -1 none
+constexpr uint64_t GET_PED_PROP_TEXTURE_INDEX = 0xE131A28626F81AB2;  // (ped, slot)
+constexpr uint64_t CLEAR_PED_PROP = 0x0943E5B8E078E76E;              // (ped, slot, p2)
+constexpr uint64_t SET_PED_PROP_INDEX = 0x93376B65A266EB5F;          // (ped, slot, drawable, texture, attach, p5)
 constexpr uint64_t CLEAR_FOCUS = 0x31B73D1EA9F01DA2;
 
 constexpr uint64_t HIDE_HUD_AND_RADAR_THIS_FRAME = 0x719FF505F097FD20;

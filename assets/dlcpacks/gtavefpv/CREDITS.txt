@@ -1,4 +1,4 @@
-gtavefpv dlcpack: the drone model for GTA V Enhanced FPV.
+gtavefpv dlcpack: the drone and the pilot's goggles for GTA V Enhanced FPV.
 
 Model: "DJI Avata2" by raphael.harris.gaffga
 https://sketchfab.com/3d-models/dji-avata2-e27ed758e2174a89a48368e84027f8d9
@@ -8,7 +8,16 @@ https://creativecommons.org/licenses/by/4.0/
 Changes: reduced from 200,579 to 15,000 triangles, turned to face GTA's
 forward axis, its materials replaced by flat colours, and converted to GTA V
 formats (.ydr, .ytd, .ytyp) with Sollumz. The build scripts are in
-tools/avata2 of https://github.com/bwcon/gtave-fpv.
+tools/models of https://github.com/bwcon/gtave-fpv.
+
+Goggles: "Tripo FPV DJI Goggles" by line-o
+https://sketchfab.com/3d-models/tripo-fpv-dji-goggles-9edb8544e5ba4cd1985fd997d366b260
+License: Creative Commons Attribution 4.0 (CC BY 4.0)
+https://creativecommons.org/licenses/by/4.0/
+
+Changes: reduced from 423,980 to 8,000 triangles, scaled to real size (0.22 m
+across), turned to face GTA's forward axis, its colour texture reduced to
+512 px, and converted to GTA V formats with Sollumz.
 
 DJI and Avata are trademarks of SZ DJI Technology Co., Ltd. This mod is not
 affiliated with or endorsed by DJI.

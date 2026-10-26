@@ -1,15 +1,14 @@
-"""Exports the built Avata2 drawable (build_model.py's build.blend) and its .ytyp.
+"""Exports a built drawable (avata2.py's or goggles.py's .blend), its .ytyp and .ytd.
 
-    blender --background <out>/build.blend --python tools/avata2/export_model.py -- <out>
-Writes <out>/gen9/ and <out>/gen8/ with gtavefpv_avata2.ydr and gtavefpv_avata2.ytyp.
+    blender --background <file.blend> --python tools/models/export_model.py -- <out> <name>
+Writes <out>/gen9/ and <out>/gen8/ with <name>.ydr, <name>.ytd and <name>.ytyp.
 """
 import os
 import sys
 
 import bpy
 
-NAME = "gtavefpv_avata2"
-out = sys.argv[sys.argv.index("--") + 1]
+out, NAME = sys.argv[sys.argv.index("--") + 1:][:2]
 
 drawable = bpy.data.objects[NAME]
 bpy.ops.object.select_all(action="DESELECT")
