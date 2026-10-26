@@ -117,6 +117,10 @@ rates, OSD layout), so that no settings live in a second interface.
    whether a bullet passes through a gap. If it does, GTA has more detailed
    weapon bounds for that fence, and the export in item 3 can use them. If it
    does not, no collision source in the game has the gaps.
+   Result (Ben, 2026-10-25): some railings stop bullets as one solid panel.
+   On the others, bullets pass through the slats too, so those railings have
+   no weapon bounds at all. No game collision has the gaps, and item 3 cannot
+   fix this. The only fix is hand-made collision for chosen fences.
 
 ## Phase 5: full HD OSD (libfpv fork)
 
