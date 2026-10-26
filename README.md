@@ -6,7 +6,7 @@ Download: https://www.gta5-mods.com/scripts/gta-v-enhanced-fpv-drone-with-real-b
 
 Trailer: https://youtu.be/C_lgsiII5-w
 
-![The FPV view](docs/fpv-view.jpg)
+![The FPV view](docs/gta-v-fpv-view.jpg)
 
 Fly an FPV drone through Los Santos with your own radio. Press F9 and a quad
 launches from the street in front of you. The drone runs on
