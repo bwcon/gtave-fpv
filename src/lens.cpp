@@ -52,13 +52,14 @@ void find(api::effect_runtime *runtime) {
     }
 }
 
-// On in the FPV view, off otherwise, whatever the ReShade menu was set to.
-// Enabling an effect ReShade skipped at startup ("load only enabled effects")
-// queues it for loading, so its uniforms can appear a few frames later.
-void switch_technique(api::effect_runtime *runtime, bool on) {
-    if (!g_technique.handle || runtime->get_technique_state(g_technique) == on) return;
-    runtime->set_technique_state(g_technique, on);
-    if (on && !g_found) g_refind = 30;
+// Always enabled; Active = 0 passes the image through outside the FPV view.
+// A technique switched off gets saved in the preset as disabled, and with
+// "load only enabled effects" ReShade then skips the effect on the next
+// start, where neither its menu nor this add-on can see it.
+void keep_enabled(api::effect_runtime *runtime) {
+    if (!g_technique.handle || runtime->get_technique_state(g_technique)) return;
+    runtime->set_technique_state(g_technique, true);
+    if (!g_found) g_refind = 30;
 }
 
 void set(api::effect_runtime *rt, Var v, float x, float y = 0, size_t count = 1) {
@@ -71,7 +72,7 @@ void set(api::effect_runtime *rt, Var v, float x, float y = 0, size_t count = 1)
 void begin_effects(api::effect_runtime *runtime) {
     if (runtime != g_runtime || (g_refind > 0 && --g_refind == 0)) find(runtime);
     drone::LensState s = drone::lens_state();
-    switch_technique(runtime, s.active);
+    keep_enabled(runtime);
     if (!g_found) return;
     set(runtime, Active, s.active ? 1.0f : 0.0f);
     if (!s.active) return;
